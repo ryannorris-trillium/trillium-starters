@@ -8,3 +8,5 @@
 script zips the folder into `game.love`, converts it with `love.js`, and
 serves the result. Balatro mods are written in this same language for this
 same engine, so this is the place to practice before touching a real mod.
+
+If the tab opens but nothing loads: in the **Ports** tab, right-click port 3000 → **Port Visibility** → **Public**, then refresh. A private port blocks the page's own file requests.
