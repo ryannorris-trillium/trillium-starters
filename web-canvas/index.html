@@ -1,0 +1,19 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Canvas starter</title>
+<style>body{margin:0;background:#181c24;display:grid;place-items:center;height:100vh}canvas{background:#0f1218}</style>
+<canvas id="c" width="640" height="400"></canvas>
+<script>
+const c = document.getElementById('c'), g = c.getContext('2d')
+let x = 320, y = 200, keys = {}
+addEventListener('keydown', e => keys[e.key] = true)
+addEventListener('keyup', e => keys[e.key] = false)
+function frame() {
+  if (keys.ArrowLeft) x -= 4; if (keys.ArrowRight) x += 4
+  if (keys.ArrowUp) y -= 4; if (keys.ArrowDown) y += 4
+  g.clearRect(0, 0, c.width, c.height)
+  g.fillStyle = '#78c8a0'; g.beginPath(); g.arc(x, y, 24, 0, Math.PI * 2); g.fill()
+  requestAnimationFrame(frame)
+}
+frame()
+</script>
