@@ -3,7 +3,11 @@
 #   bash <(curl -s https://raw.githubusercontent.com/ryannorris-trillium/trillium-starters/main/get.sh) love
 # Available: love · pygame · web-canvas · terminal-python
 set -e
-name="${1:?usage: get.sh <starter-name>}"
+name="${1:-}"
+if [ -z "$name" ]; then
+  echo "Which starter? terminal-python  pygame  web-canvas  love"
+  read -r -p "Type one and press Enter: " name < /dev/tty
+fi
 repo="https://github.com/ryannorris-trillium/trillium-starters"
 if [ -e "$name" ]; then echo "A folder named '$name' already exists here. Rename it first."; exit 1; fi
 tmp="$(mktemp -d)"
