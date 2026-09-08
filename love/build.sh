@@ -8,4 +8,4 @@ rm -f game.love && zip -9 -r -q game.love . -x 'build.sh' 'web/*' 'game.love' 'R
 rm -rf web
 npx --yes love.js -c -t "Trillium LÖVE" game.love web
 echo "Serving on port 3000 — open it in the browser (Ctrl+C to stop)."
-npx --yes serve -l 3000 web
+npx --yes serve --listen 3000 web
