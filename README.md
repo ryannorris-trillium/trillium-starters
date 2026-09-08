@@ -19,3 +19,9 @@ bash <(curl -s https://raw.githubusercontent.com/ryannorris-trillium/trillium-st
 | `love` | Lua + LÖVE | browser tab (love.js) |
 
 Each folder has a README with the two or three commands it needs.
+
+**Updating a starter you already have:** run the same line again. It adds any new
+files and never overwrites yours.
+
+**Paste in the terminal** with Ctrl+Shift+V. Keep the whole command on one line;
+if the name gets cut off, the script asks for it.
