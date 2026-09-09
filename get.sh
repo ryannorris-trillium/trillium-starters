@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Copy one starter from the class starters repo into the current repository.
-#   bash <(curl -s https://raw.githubusercontent.com/ryannorris-trillium/trillium-starters/main/get.sh) love
+#   First time:  bash <(curl -s https://raw.githubusercontent.com/ryannorris-trillium/trillium-starters/main/get.sh) love
+#   After that:  get love
 # Available: hunt · love · pygame · web-canvas · terminal-python
 set -e
 name="${1:-}"
@@ -9,6 +10,14 @@ if [ -z "$name" ]; then
   read -r -p "Type one and press Enter: " name < /dev/tty
 fi
 repo="https://github.com/ryannorris-trillium/trillium-starters"
+# Install this script as the `get` command so next time is just: get <name>
+bin="$HOME/.local/bin"
+if [ ! -x "$bin/get" ]; then
+  mkdir -p "$bin"
+  curl -sL "https://raw.githubusercontent.com/ryannorris-trillium/trillium-starters/main/get.sh" -o "$bin/get" && chmod +x "$bin/get"
+  case ":$PATH:" in *":$bin:"*) ;; *) echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc";; esac
+  echo "Installed the 'get' command. Next time, in a new terminal, just type:  get <name>"
+fi
 update=0
 if [ -e "$name" ]; then update=1; echo "Folder '$name' already exists — adding any new starter files, keeping yours."; fi
 tmp="$(mktemp -d)"
