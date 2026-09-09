@@ -2,15 +2,22 @@
 
 Small, working starting points you copy into your own repository.
 
-In your codespace terminal, run one of these, then commit the new folder:
+In your codespace terminal, the first time, run this (all one line):
 
 ```
-bash <(curl -s https://raw.githubusercontent.com/ryannorris-trillium/trillium-starters/main/get.sh) hunt
-bash <(curl -s https://raw.githubusercontent.com/ryannorris-trillium/trillium-starters/main/get.sh) pygame
-bash <(curl -s https://raw.githubusercontent.com/ryannorris-trillium/trillium-starters/main/get.sh) love
-bash <(curl -s https://raw.githubusercontent.com/ryannorris-trillium/trillium-starters/main/get.sh) web-canvas
-bash <(curl -s https://raw.githubusercontent.com/ryannorris-trillium/trillium-starters/main/get.sh) terminal-python
+bash <(curl -sL trillium-math-lessons.vercel.app/get) hunt
 ```
+
+That copies the `hunt` folder in and installs a `get` command. From then on, open a new terminal and just type:
+
+```
+get pygame
+get love
+get web-canvas
+get terminal-python
+```
+
+Then commit the new folder.
 
 | Starter | Language | Shows up as |
 |---|---|---|
