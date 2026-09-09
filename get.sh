@@ -2,11 +2,11 @@
 # Copy one starter from the class starters repo into the current repository.
 #   First time:  bash <(curl -s https://raw.githubusercontent.com/ryannorris-trillium/trillium-starters/main/get.sh) love
 #   After that:  get love
-# Available: hunt · love · pygame · web-canvas · terminal-python
+# Available: hunt · love · pygame · web-canvas · terminal-python · showdown
 set -e
 name="${1:-}"
 if [ -z "$name" ]; then
-  echo "Which starter? hunt  terminal-python  pygame  web-canvas  love"
+  echo "Which starter? hunt  terminal-python  pygame  web-canvas  love  showdown"
   read -r -p "Type one and press Enter: " name < /dev/tty
 fi
 repo="https://github.com/ryannorris-trillium/trillium-starters"
