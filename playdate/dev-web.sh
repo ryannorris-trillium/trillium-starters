@@ -25,6 +25,10 @@ fi
 # source/ -> _web/, a plain Love2D project
 lua5.4 build/web.lua
 
+# The browser runs plain Lua 5.1, which has no `goto`. Playbit uses
+# `goto continue` in a few loops; this rewrites them into the Lua 5.1 form.
+python3 build/lua51-continue.py _web
+
 # Love2D in a browser runs on WebGL 1, which is stricter than a desktop
 # graphics card. Four edits keep Playbit's shader compiling there: drop the
 # GLSL 3 line, drop the "f" on numbers like 0.45f, make the two colors
