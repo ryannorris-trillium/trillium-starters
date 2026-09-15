@@ -6,8 +6,8 @@ browser tab. One file to edit: `source/main.lua`.
 1. In the terminal: `bash playdate/dev-web.sh`
    The first run downloads a few things and takes a minute or two.
 2. When the "port 3000" notification appears, click **Open in Browser**.
-3. Arrow keys move the circle. Touch the square to score. Scroll the mouse
-   wheel over the game to turn the crank.
+3. Arrow keys move the circle. Touch the square to score. Hold `,` and `.` to
+   turn the crank, which swings the needle. `Q` and `E` do the same thing.
 
 Edit `source/main.lua`, save, press Ctrl+C in the terminal, run
 `bash playdate/dev-web.sh` again, refresh the tab.
@@ -32,6 +32,11 @@ The browser version runs on [Playbit](https://github.com/GamesRightMeow/playbit)
 which rewrites the Playdate API on top of Love2D so it can run anywhere. Playbit
 covers drawing, buttons, the crank, images, and fonts. It does not cover
 sprites, so `playdate.graphics.sprite` will not work here. Draw with shapes.
+
+A real Playdate has a crank on its side. A Chromebook does not, so the block at
+the bottom of `source/main.lua` turns `,` and `.` into crank rotation for the
+browser. That block is marked `!if LOVE2D`, which means the build system deletes
+it when it compiles for the real hardware.
 
 ## Make it yours
 

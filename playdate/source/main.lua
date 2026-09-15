@@ -43,7 +43,7 @@ function playdate.update()
     moveTarget()
   end
 
-  -- The crank turns a needle. In the browser the crank is the scroll wheel.
+  -- The crank turns a needle. In the browser the crank is the , and . keys.
   local angle = math.rad(playdate.getCrankPosition())
   local needleX = player.x + math.sin(angle) * 26
   local needleY = player.y - math.cos(angle) * 26
@@ -58,3 +58,17 @@ function playdate.update()
 end
 
 moveTarget()
+
+!if LOVE2D then
+-- Browser only: crank on keys. A Chromebook has no scroll wheel, so , and .
+-- turn the crank 3 degrees per frame. Q and E do the same thing.
+local keyCrank = 0
+local wheelCrank = playdate.getCrankPosition
+function love.update()
+  if love.keyboard.isDown(",", "q") then keyCrank = keyCrank - 3 end
+  if love.keyboard.isDown(".", "e") then keyCrank = keyCrank + 3 end
+end
+function playdate.getCrankPosition()
+  return (wheelCrank() + keyCrank) % 360
+end
+!end
