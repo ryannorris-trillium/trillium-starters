@@ -1,0 +1,8 @@
+{
+  "name": "Trillium Playdate Starter",
+  "author": "Your name",
+  "description": "A tiny Playdate game.",
+  "bundleID": "com.trillium.playdatestarter",
+  "version": "1.0",
+  "buildNumber": 1
+}

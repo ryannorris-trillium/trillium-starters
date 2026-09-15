@@ -14,6 +14,7 @@ That copies the `hunt` folder in and installs a `get` command. From then on, ope
 get madlibs
 get pygame
 get love
+get playdate
 get web-canvas
 get terminal-python
 ```
@@ -27,6 +28,7 @@ Then commit the new folder.
 | `pygame` | Python + Pygame | browser tab (pygbag) |
 | `web-canvas` | JavaScript | browser tab (no build) |
 | `love` | Lua + LÖVE | browser tab (love.js) |
+| `playdate` | Lua + Playdate SDK | browser tab (Playbit + love.js) |
 
 Each folder has a README with the two or three commands it needs.
 
