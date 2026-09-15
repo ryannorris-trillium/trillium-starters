@@ -34,7 +34,12 @@ sed -i -e '/#pragma language glsl3/d' \
        -e 's/^extern \(vec4 white = .*\)/const \1/' \
        -e 's/^extern \(vec4 black = .*\)/const \1/' \
        -e 's/\.a > 0)/.a > 0.0)/g' \
+       -e 's/if (pattern\[x + y \* 8\] == 1) {/int idx = x + y * 8; int pv = 0; for (int i = 0; i < 64; i++) { if (i == idx) pv = pattern[i]; }\n    if (pv == 1) {/' \
        _web/playdate/shader
+# The last edit matters most: WebGL 1 refuses "pattern[x + y * 8]" because a
+# fragment shader may only index an array with a constant or a loop counter
+# ("Index expression can only contain const or loop symbols"). Walking the
+# array with a loop and picking the matching entry is the standard workaround.
 
 # _web/ -> game.love -> web/, a page the browser can run
 rm -f game.love
