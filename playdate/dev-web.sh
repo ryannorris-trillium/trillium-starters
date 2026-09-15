@@ -29,6 +29,10 @@ lua5.4 build/web.lua
 # `goto continue` in a few loops; this rewrites them into the Lua 5.1 form.
 python3 build/lua51-continue.py _web
 
+# Lua 5.1 in the browser also has no `bit` library; give Playbit the two
+# functions it uses.
+cat build/bit51.lua _web/main.lua > _web/main.lua.new && mv _web/main.lua.new _web/main.lua
+
 # Love2D in a browser runs on WebGL 1, which is stricter than a desktop
 # graphics card. Four edits keep Playbit's shader compiling there: drop the
 # GLSL 3 line, drop the "f" on numbers like 0.45f, make the two colors
