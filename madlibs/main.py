@@ -1,6 +1,7 @@
 """Mad Libs. Ask for words, drop them into a story, print the story.
 
-Run it:   python3 madlibs/main.py
+Run it:   cd madlibs
+          python3 main.py
 Then open README.md in this folder for the five changes to make.
 """
 import random

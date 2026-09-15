@@ -1,10 +1,13 @@
 # Mad Libs
 
-Run it first:
+Go into the folder first, then run it. Work from inside the folder you care about; every command gets shorter.
 
 ```
-python3 madlibs/main.py
+cd madlibs
+python3 main.py
 ```
+
+If the terminal says it cannot find `main.py`, type `pwd` to see where you are and `cd` back into `madlibs`.
 
 Answer the four questions and read the story. Then make it yours, one step at a time. Run the program after every step. If it breaks, read the last line of the error.
 
