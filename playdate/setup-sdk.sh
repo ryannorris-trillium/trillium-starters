@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# Optional. Downloads Panic's Playdate SDK so you can build a real .pdx and run
-# the official Simulator.  bash playdate/setup-sdk.sh
+# Optional. Downloads Panic's Playdate SDK so you can build a real .pdx.
+#   bash playdate/setup-sdk.sh                   # just the compiler (pdc)
+#   bash playdate/setup-sdk.sh --with-simulator  # also the desktop Simulator
 set -e
 cd "$(dirname "$0")"
 
 SDK="$HOME/PlaydateSDK"
+WITH_SIM=0
+[ "${1:-}" = "--with-simulator" ] && WITH_SIM=1
 
 if [ ! -x "$SDK/bin/pdc" ]; then
   echo "The Playdate SDK is Panic's software, under this license:"
@@ -22,12 +25,40 @@ else
   echo "SDK already in $SDK"
 fi
 
-# Libraries the Simulator binary asks for. This list is the NEEDED entries in
-# PlaydateSDK/bin/PlaydateSimulator, not a guess.
-sudo apt-get update -qq
-sudo apt-get install -y -qq \
-  libgtk-3-0 libwebkit2gtk-4.1-0 libpng16-16 libunwind8 \
-  libudev1 libxkbcommon0 libx11-6 libgl1
+# Only the compiler is needed to make a .pdx you can put on a real Playdate.
+# These three are almost always present already, so this usually installs
+# nothing and skips the slow apt update.
+need_pdc="libpng16-16 zlib1g libstdc++6"
+# The Simulator is a desktop program and drags in GTK and WebKit, which is a
+# few hundred megabytes. Only --with-simulator asks for them.
+need_sim="libgtk-3-0 libwebkit2gtk-4.1-0 libunwind8 libudev1 libxkbcommon0 libx11-6 libgl1"
+
+wanted="$need_pdc"
+[ "$WITH_SIM" = 1 ] && wanted="$wanted $need_sim"
+
+missing=""
+for p in $wanted; do
+  dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -q "^install ok installed$" || missing="$missing $p"
+done
+
+if [ -n "$missing" ]; then
+  echo "Installing:$missing"
+  sudo apt-get update -qq
+  # shellcheck disable=SC2086
+  sudo apt-get install -y -qq $missing || echo "Some packages would not install. Keep going and see what ldd says below."
+else
+  echo "All needed libraries are already installed."
+fi
+
+# The real check: ask the compiler binary itself what it is still missing.
+if ldd "$SDK/bin/pdc" 2>/dev/null | grep -q "not found"; then
+  echo
+  echo "pdc is still missing these libraries:"
+  ldd "$SDK/bin/pdc" | grep "not found" | sed 's/^/  /'
+  echo "Tell Ryan what this says."
+  exit 1
+fi
+echo "pdc has every library it needs."
 
 # pdc reads this to find the SDK.
 if ! grep -q PLAYDATE_SDK_PATH "$HOME/.bashrc" 2>/dev/null; then

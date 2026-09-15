@@ -82,14 +82,48 @@ You do not need a Playdate for any of the above. If Ryan has one in the room:
 
 ```
 bash playdate/setup-sdk.sh      # once, downloads Panic's SDK
-bash playdate/build-device.sh   # makes playdate/game.pdx
+bash playdate/build-device.sh   # makes the file the Playdate wants
 ```
 
-`setup-sdk.sh` prints Panic's SDK license and waits for you to accept it.
+`setup-sdk.sh` prints Panic's SDK license and waits for you to accept it. It
+installs only the compiler, which is a small download. Add `--with-simulator`
+if you also want the desktop Simulator, which is much bigger.
 
-Then zip `game.pdx`, sign in at [play.date](https://play.date), go to your
-Account page and then **Sideload**, and upload the zip. The Playdate picks it up
-from Game Library.
+`build-device.sh` compiles `source/main.lua` into `playdate/game.pdx` and then
+packs that into `playdate/dist/<your-repo-name>.pdx.zip`. That zip is the file
+you upload.
+
+Sign in at [play.date](https://play.date), go to your Account page, then
+**Sideload**, and upload the zip. On the Playdate, open **Game Library** and
+refresh the list. On older Playdate system software it is **Settings** then
+**Games** instead.
+
+### From a school Chromebook
+
+A school Chromebook blocks downloads, so you cannot save the zip out of the
+codespace. Send it through Google Drive instead.
+
+1. Build it: `bash playdate/build-device.sh`
+2. Commit and sync the zip. The script prints the exact command, and Source
+   Control works too: stage `playdate/dist`, Commit, Sync Changes.
+3. Wait up to five minutes. A program on Ryan's computer watches your
+   repository and copies the zip into a Drive folder shared with you.
+4. Go to [play.date](https://play.date), sign in, then **Account** then
+   **Sideload**.
+5. Click the upload box. In the ChromeOS file picker, choose **Google Drive**
+   in the left column, then **Shared with me**, then **Playdate builds**, then
+   your name, then the zip inside. If two files are there, take the newest one.
+   Drive files can be picked for upload without downloading them, which is why
+   this works.
+6. On the Playdate, open **Game Library** and refresh the list. Your game
+   appears under the name in `source/metadata.json`. On older Playdate system
+   software the path is **Settings** then **Games** instead.
+
+If step 5 shows no Drive option in the picker, tell Ryan. It means the folder
+has not been shared with your school account yet.
+
+For Ryan: share `Playdate builds/<Student>` in Drive with that student's school
+account once, before they try this.
 
 ## Optional: the official simulator
 
