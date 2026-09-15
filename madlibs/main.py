@@ -2,7 +2,7 @@
 
 Run it:   cd madlibs
           python3 main.py
-Then open README.md in this folder for the five changes to make.
+Then open README.md in this folder for the four changes to make.
 """
 import random
 
