@@ -111,8 +111,10 @@ codespace. Send it through Google Drive instead.
 4. Go to [play.date](https://play.date), sign in, then **Account** then
    **Sideload**.
 5. Click the upload box. In the ChromeOS file picker, choose **Google Drive**
-   in the left column, then **Shared with me**, then **Playdate builds**, then
-   your name, then the zip inside. If two files are there, take the newest one.
+   in the left column, then **Shared with me**. The folder Ryan shared is in
+   there, named either **Playdate builds** with your name inside it, or just
+   your name. Open it and pick the `.pdx.zip`. If two zips are there, take the
+   newest one. Ignore `latest.txt`, which only says when the zip arrived.
    Drive files can be picked for upload without downloading them, which is why
    this works.
 6. On the Playdate, open **Game Library** and refresh the list. Your game
