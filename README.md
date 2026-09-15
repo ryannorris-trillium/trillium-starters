@@ -11,6 +11,7 @@ bash <(curl -sL trillium-math-lessons.vercel.app/get) hunt
 That copies the `hunt` folder in and installs a `get` command. From then on, open a new terminal and just type:
 
 ```
+get madlibs
 get pygame
 get love
 get web-canvas
