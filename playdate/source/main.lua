@@ -1,14 +1,6 @@
-@@"playbit/header.lua"
-
 import("CoreLibs/graphics")
 
 local gfx = playdate.graphics
-
-!if LOVE2D then
--- Browser only. The Playdate screen is 400 x 240, so draw it at double size.
-playbit.graphics.setCanvasScale(2)
-playbit.graphics.setWindowSize(800, 480)
-!end
 
 local player = { x = 200, y = 120, r = 8 }
 local target = { x = 300, y = 60, size = 14 }

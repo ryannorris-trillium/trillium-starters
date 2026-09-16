@@ -9,8 +9,6 @@
 -- Arrow keys move. Walls block you. Touch the prize to score. The crank sets
 -- how fast you move. Your best score is saved and comes back next time.
 
-@@"playbit/header.lua"
-
 import("CoreLibs/graphics")
 import("CoreLibs/sprites")
 import("CoreLibs/object")
@@ -19,12 +17,6 @@ import("CoreLibs/easing")
 import("CoreLibs/ui")
 
 local gfx = playdate.graphics
-
-!if LOVE2D then
--- Browser only. The Playdate screen is 400 x 240, so draw it at double size.
-playbit.graphics.setCanvasScale(2)
-playbit.graphics.setWindowSize(800, 480)
-!end
 
 -- Every sprite carries a tag so the collision code can tell them apart.
 local TAG_PLAYER = 1
