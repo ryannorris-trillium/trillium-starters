@@ -105,6 +105,44 @@ function pbg.setWindowSize(width, height)
   end
 end
 
+-- The Playdate screen is 400 by 240, which is a postage stamp on a laptop, so
+-- the browser build draws it at double size. This happens while the game is
+-- still loading, before any artwork exists, which is the one moment a resize
+-- costs nothing. A game that wants some other size sets it for itself.
+pbg.setCanvasScale(2)
+pbg.setWindowSize(400 * 2, 240 * 2)
+
+-- The screen the game starts on ------------------------------------------------
+--
+-- Playbit clears the screen once, on its first frame, with
+--
+--   local c = playbit.graphics.lastClearColor
+--   love.graphics.clear(c.r, c.g, c.b, 1)
+--
+-- but its two colours are lists, `{ r, g, b, a }`, so `c.r` is nil and the
+-- clear is always plain black. A game that fills the screen once at the start
+-- and then leaves the sprite system to repaint only what moves ends up with
+-- its background in one black and every erased rectangle in another, and every
+-- sprite drags a visible trail behind it.
+--
+-- Two fixes. Give the colours r, g, b names as well, so that first clear is a
+-- real colour; and let setBackgroundColor choose it, which is the colour the
+-- Playdate's own screen starts at.
+local function nameChannels(color)
+  color.r, color.g, color.b, color.a = color[1], color[2], color[3], color[4]
+  return color
+end
+
+nameChannels(pbg.COLOR_WHITE)
+nameChannels(pbg.COLOR_BLACK)
+
+local realSetBackgroundColor = gfx.setBackgroundColor
+
+function gfx.setBackgroundColor(color)
+  realSetBackgroundColor(color)
+  pbg.lastClearColor = pbg.backgroundColor
+end
+
 -- Marker for pushContext() with no image, which saves state without changing
 -- where the drawing goes.
 local SCREEN_CONTEXT = {}
@@ -201,6 +239,36 @@ end
 -- back into the image. There is nothing left to copy.
 function pbg.updateContext() end
 
+-- Colors -----------------------------------------------------------------------
+--
+-- Playbit knows black and white and stops there, so gfx.kColorClear and
+-- gfx.kColorXOR are both nil. That is worse than missing: SDK code writes
+--
+--   elseif self.strokeColor == gfx.kColorClear then -- don't draw
+--
+-- and a stroke colour that was never set is nil too, so the test passes and
+-- the shape silently disappears. The numbers are the SDK's own.
+gfx.kColorBlack = 0
+gfx.kColorWhite = 1
+gfx.kColorClear = 2
+gfx.kColorXOR = 3
+
+local realSetColor = gfx.setColor
+
+function gfx.setColor(color)
+  if color == gfx.kColorClear then
+    -- Nothing here can leave a hole in the screen, so clear paints in the
+    -- background colour, which looks the same anywhere but inside an image.
+    warn.note("the colour 'clear' paints the background colour here, it does not punch a hole")
+    return realSetColor(pbg.backgroundColorIndex)
+  end
+  if color == gfx.kColorXOR then
+    warn.once("the colour 'XOR'")
+    return realSetColor(gfx.kColorWhite)
+  end
+  return realSetColor(color)
+end
+
 -- Draw modes ------------------------------------------------------------------
 
 -- Playbit's setImageDrawMode raises an error for the three modes its shader
@@ -268,20 +336,66 @@ local function polygonPoints(...)
   return { ... }
 end
 
+-- Shapes written by hand often repeat the first point at the end to close the
+-- loop, and Love's polygon outline cannot cope with a segment of zero length:
+-- the corner has no direction, so the mitre it builds there shoots off the
+-- screen as a long black wedge. Dropping the repeats is enough.
+local function withoutRepeats(points)
+  local out = { points[1], points[2] }
+  for i = 3, #points - 1, 2 do
+    local x, y = points[i], points[i + 1]
+    if x ~= out[#out - 1] or y ~= out[#out] then
+      out[#out + 1] = x
+      out[#out + 1] = y
+    end
+  end
+  if #out >= 6 and out[1] == out[#out - 1] and out[2] == out[#out] then
+    out[#out] = nil
+    out[#out] = nil
+  end
+  return out
+end
+
+-- The Playdate joins the points it is given and stops; it closes the shape
+-- only for a polygon that was closed with close(). Drawing the segments one
+-- at a time says exactly that, and has no corners to mitre.
 function gfx.drawPolygon(...)
   local points = polygonPoints(...)
   if #points < 6 then
     return
   end
-  withPattern(love.graphics.polygon, "line", points)
+  local closed = false
+  local first = select(1, ...)
+  if type(first) == "table" and first._closed then
+    closed = true
+  end
+  if points[1] == points[#points - 1] and points[2] == points[#points] then
+    closed = true
+  end
+  points = withoutRepeats(points)
+  withPattern(function()
+    for i = 1, #points - 3, 2 do
+      love.graphics.line(points[i], points[i + 1], points[i + 2], points[i + 3])
+    end
+    if closed and #points >= 6 then
+      love.graphics.line(points[#points - 1], points[#points], points[1], points[2])
+    end
+  end)
 end
 
 function gfx.fillPolygon(...)
-  local points = polygonPoints(...)
+  local points = withoutRepeats(polygonPoints(...))
   if #points < 6 then
     return
   end
-  withPattern(love.graphics.polygon, "fill", points)
+  -- Love triangulates a fill and gives up on a shape that crosses itself.
+  -- The Playdate just fills it, so fall back to the outline rather than
+  -- stopping the game.
+  local ok = pcall(withPattern, love.graphics.polygon, "fill", points)
+  if not ok then
+    warn.once("filling a polygon that crosses itself")
+    gfx.drawPolygon(points)
+  end
 end
 
 function gfx.drawEllipseInRect(x, y, width, height)

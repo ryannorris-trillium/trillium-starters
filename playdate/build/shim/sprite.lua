@@ -86,6 +86,12 @@ function sprite:init(image)
 end
 
 function sprite.new(image)
+  -- Plenty of SDK code writes gfx.sprite:new(), with a colon, which hands the
+  -- class itself in where the image goes. Hardware ignores an argument that
+  -- is not an image, so this does too.
+  if image == sprite then
+    image = nil
+  end
   return sprite(image)
 end
 
@@ -650,9 +656,18 @@ local function drawOne(s)
   bx = math.floor(bx)
   by = math.floor(by)
   if s.draw ~= sprite.draw then
+    if s.width <= 0 or s.height <= 0 then
+      return
+    end
+    -- Hardware clips a sprite's own drawing to its bounds. Without that,
+    -- anything drawn a pixel outside them is never erased again, and a moving
+    -- sprite paints a trail across the screen that never goes away.
+    local clipX, clipY, clipWidth, clipHeight = love.graphics.getScissor()
     love.graphics.push()
     love.graphics.translate(bx, by)
+    love.graphics.setScissor(bx + pbg.drawOffset.x, by + pbg.drawOffset.y, s.width, s.height)
     s:draw(0, 0, s.width, s.height)
+    love.graphics.setScissor(clipX, clipY, clipWidth, clipHeight)
     love.graphics.pop()
   elseif s.image then
     if s.scaleX ~= 1 or s.scaleY ~= 1 then

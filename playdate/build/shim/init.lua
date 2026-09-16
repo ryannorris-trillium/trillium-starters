@@ -17,6 +17,7 @@ playdate.shim = shim
 
 shim.warn = require("shim.warn")
 require("shim.compat")
+require("shim.geometry")
 require("shim.graphics")
 require("shim.sprite")
 require("shim.file")
