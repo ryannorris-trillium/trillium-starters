@@ -337,8 +337,14 @@ function sprite:getCollideRect()
   return playdate.geometry.rect.new(r.x, r.y, r.width, r.height)
 end
 
+-- Four numbers, like getBounds, not a rect: that is what the SDK returns and
+-- what SDK code unpacks it into.
 function sprite:getCollideBounds()
-  return self:getCollideRect()
+  local r = self.collideRect
+  if not r then
+    return 0, 0, 0, 0
+  end
+  return r.x, r.y, r.width, r.height
 end
 
 function sprite:clearCollideRect()
@@ -388,6 +394,8 @@ function sprite:setCollisionsEnabled(flag)
   self.collisionsEnabled = flag
 end
 
+local responseOf
+
 -- Default response. Override this method, or pass a constant to
 -- setCollisionResponse, to change what happens on contact.
 function sprite:collisionResponse(other)
@@ -395,13 +403,19 @@ function sprite:collisionResponse(other)
 end
 
 function sprite:setCollisionResponse(response)
+  self.collisionResponse = response
+end
+
+-- collisionResponse is a function on most sprites and a bare constant on
+-- others: the SDK accepts a sprite that just writes
+-- `player.collisionResponse = gfx.sprite.kCollisionTypeBounce`, so this does
+-- too rather than trying to call a number.
+function responseOf(self, other)
+  local response = self.collisionResponse
   if type(response) == "function" then
-    self.collisionResponse = response
-  else
-    self.collisionResponse = function()
-      return response
-    end
+    return response(self, other)
   end
+  return response
 end
 
 -- Queries -------------------------------------------------------------------------
@@ -519,7 +533,7 @@ local function axisPass(self, others, collisions, seen, axis, from, to)
     local other = others[i]
     local ox, oy, ow, oh = other:_worldCollideRect()
     if rectsOverlap(sx, sy, sw, sh, ox, oy, ow, oh) then
-      local response = self:collisionResponse(other)
+      local response = responseOf(self, other)
       hits[#hits + 1] = { other = other, response = response,
         ox = ox, oy = oy, ow = ow, oh = oh }
       if response ~= sprite.kCollisionTypeOverlap and delta ~= 0 then

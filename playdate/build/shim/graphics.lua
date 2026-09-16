@@ -424,6 +424,28 @@ function gfx.fillCircleInRect(x, y, width, height)
   gfx.fillCircleAtPoint(x + width * 0.5, y + height * 0.5, r)
 end
 
+-- Rectangles ---------------------------------------------------------------------
+--
+-- The SDK takes either four numbers or a rect wherever a rectangle is wanted.
+-- Playbit takes only the numbers.
+local function rectangleArguments(x, y, width, height)
+  if type(x) == "table" then
+    return x.x, x.y, x.width, x.height
+  end
+  return x, y, width, height
+end
+
+local realFillRect = gfx.fillRect
+local realDrawRect = gfx.drawRect
+
+function gfx.fillRect(x, y, width, height)
+  return realFillRect(rectangleArguments(x, y, width, height))
+end
+
+function gfx.drawRect(x, y, width, height)
+  return realDrawRect(rectangleArguments(x, y, width, height))
+end
+
 -- Clipping ---------------------------------------------------------------------
 
 local clipRect = nil
