@@ -1,7 +1,8 @@
 -- Browser only. love.js runs plain Lua 5.1, which has no `bit` library
 -- (LuaJIT and the real Playdate both have one). Playbit uses bit.lshift and
--- bit.band to expand dither patterns, so this provides just those, in plain
--- arithmetic. Prepended to main.lua by dev-web.sh.
+-- bit.band to expand dither patterns, and build/shim uses bit.bor for sprite
+-- collision groups, so this provides those four in plain arithmetic. Prepended
+-- to main.lua by dev-web.sh, before anything else runs.
 if not bit then
   bit = {}
   function bit.lshift(x, n)

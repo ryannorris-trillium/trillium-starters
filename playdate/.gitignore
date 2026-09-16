@@ -4,3 +4,4 @@ _pdx/
 web/
 game.love
 game.pdx/
+build/__pycache__/

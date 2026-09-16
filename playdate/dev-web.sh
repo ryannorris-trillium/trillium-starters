@@ -22,7 +22,10 @@ if [ ! -d playbit ]; then
   git -C playbit submodule update -q --init --recursive
 fi
 
-# source/ -> _web/, a plain Love2D project
+# source/ -> _web/, a plain Love2D project. This also copies build/shim/, the
+# parts of the Playdate SDK that Playbit does not have, and build/entry.lua,
+# which becomes _web/main.lua and loads the shim before the game. See
+# docs/api-coverage.md.
 lua5.4 build/web.lua
 
 # The browser runs plain Lua 5.1, which has no `goto`. Playbit uses
