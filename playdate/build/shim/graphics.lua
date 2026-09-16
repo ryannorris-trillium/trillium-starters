@@ -79,8 +79,18 @@ local function promoteToCanvas(image)
   image.data = canvas
 end
 
+-- Whatever was the render target before the outermost push. During a frame
+-- that is Playbit's screen canvas; while the game is still loading it is
+-- nothing at all, and it must go back to nothing, because LOVE refuses to
+-- run its event loop while a canvas is left active ("love.event.pump cannot
+-- be called while a Canvas is active").
+local baseTarget = nil
+
 function gfx.pushContext(image)
   local stack = pbg.contextStack
+  if #stack == 0 then
+    baseTarget = love.graphics.getCanvas()
+  end
   if image == nil then
     stack[#stack + 1] = SCREEN_CONTEXT
     return
@@ -97,14 +107,16 @@ function gfx.popContext()
     return
   end
   table.remove(stack)
-  -- Back to the innermost image still on the stack, or the screen.
+  -- Back to the innermost image still on the stack, or whatever was the
+  -- target before the first push.
   for i = #stack, 1, -1 do
     if stack[i] ~= SCREEN_CONTEXT then
       love.graphics.setCanvas(stack[i]._canvas)
       return
     end
   end
-  love.graphics.setCanvas(pbg.canvas)
+  love.graphics.setCanvas(baseTarget)
+  baseTarget = nil
 end
 
 -- Playbit calls this at the end of every drawing command to copy the canvas
