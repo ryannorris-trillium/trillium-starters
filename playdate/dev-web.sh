@@ -38,12 +38,14 @@ cat build/bit51.lua _web/main.lua > _web/main.lua.new && mv _web/main.lua.new _w
 
 # Love2D in a browser runs on WebGL 1, which is stricter than a desktop
 # graphics card. Four edits keep Playbit's shader compiling there: drop the
-# GLSL 3 line, drop the "f" on numbers like 0.45f, make the two colors
-# constants instead of settable values, and compare floats to 0.0 not 0.
+# GLSL 3 line, drop the "f" on numbers like 0.45f, drop the starting values
+# from the two colors (WebGL 1 does not allow a setting to carry one, so
+# build/shim/graphics.lua sends them once at startup), and compare floats to
+# 0.0 not 0.
 sed -i -e '/#pragma language glsl3/d' \
        -e 's/\([0-9]\)f\b/\1/g' \
-       -e 's/^extern \(vec4 white = .*\)/const \1/' \
-       -e 's/^extern \(vec4 black = .*\)/const \1/' \
+       -e 's/^extern vec4 white = .*/extern vec4 white;/' \
+       -e 's/^extern vec4 black = .*/extern vec4 black;/' \
        -e 's/\.a > 0)/.a > 0.0)/g' \
        -e 's/if (pattern\[x + y \* 8\] == 1) {/int idx = x + y * 8; int pv = 0; for (int i = 0; i < 64; i++) { if (i == idx) pv = pattern[i]; }\n    if (pv == 1) {/' \
        _web/playdate/shader

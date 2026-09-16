@@ -1114,6 +1114,96 @@ test("compound assignment: the thing being assigned to", function()
     "a field of a field")
 end)
 
+-- Playdate .fnt fonts ------------------------------------------------------------
+
+local fontShim = require("shim.font")
+
+local SAMPLE_FNT = table.concat({
+  "-- a note",
+  "tracking=1",
+  "space\t14",
+  "A\t\t10",
+  "B\t\t11",
+  "AB\t-2",
+}, "\n")
+
+test("fonts: reading a .fnt", function()
+  local font = fontShim.parse(SAMPLE_FNT)
+  checkEqual(font.tracking, 1, "tracking is read")
+  checkEqual(#font.glyphs, 3, "three glyphs, and the comment is not one of them")
+  checkEqual(font.glyphs[1].code, 32, "`space` means the space character")
+  checkEqual(font.glyphs[1].width, 14, "with its width")
+  checkEqual(font.glyphs[2].code, 65, "then A")
+  checkEqual(font.glyphs[3].width, 11, "then B, eleven wide")
+  checkEqual(font.kerning["65:66"], -2, "a two character line is a kerning pair")
+end)
+
+test("fonts: characters outside ascii", function()
+  local codes = fontShim.codepoints("a\226\128\166")
+  checkEqual(#codes, 2, "an ellipsis is one character, not three bytes")
+  checkEqual(codes[1], 97, "the a")
+  checkEqual(codes[2], 0x2026, "the ellipsis")
+
+  local font = fontShim.parse("\226\128\166\t12")
+  checkEqual(#font.glyphs, 1, "a line naming it is one glyph")
+  checkEqual(font.glyphs[1].code, 0x2026, "at the right code")
+end)
+
+test("fonts: finding the sheet beside the .fnt", function()
+  fake.files["ui/Roobert-24-Medium-Numerals.fnt"] = SAMPLE_FNT
+  fake.files["ui/Roobert-24-Medium-Numerals-table-36-36.png"] = { width = 360, height = 36 }
+  local path, width, height = fontShim.findAtlas("ui/Roobert-24-Medium-Numerals")
+  checkEqual(path, "ui/Roobert-24-Medium-Numerals-table-36-36.png", "the sheet is found by name")
+  checkEqual(width, 36, "cell width comes out of the file name")
+  checkEqual(height, 36, "and cell height")
+  checkEqual(fontShim.findAtlas("ui/NoSuchFont"), nil, "and nothing is found for a font with no sheet")
+end)
+
+test("fonts: measuring and loading", function()
+  fake.files["ui/Roobert-24-Medium-Numerals.fnt"] = SAMPLE_FNT
+  fake.files["ui/Roobert-24-Medium-Numerals-table-36-36.png"] = { width = 360, height = 36 }
+  local font = gfx.font.new("ui/Roobert-24-Medium-Numerals")
+  check(font ~= nil, "the font loads")
+  if font then
+    checkEqual(font:getHeight(), 36, "the height is the cell height")
+    -- A is 10 and B is 11, each plus one of tracking, and AB kerns by -2.
+    checkEqual(font:getTextWidth("AB"), 10 + 1 + 11 + 1 - 2, "widths, tracking and kerning add up")
+    checkEqual(font:getTextWidth("A"), 11, "one letter is its width plus tracking")
+    checkEqual(font:getGlyph("B"), 11, "a glyph reports its own width")
+    local ok = pcall(function()
+      gfx.setFont(font)
+      gfx.drawText("AB", 4, 4)
+    end)
+    check(ok, "drawing with it does not fail")
+  end
+end)
+
+test("fonts: a missing one says so rather than stopping the game", function()
+  local font = gfx.font.new("ui/NotHere")
+  checkEqual(font, nil, "no font comes back")
+end)
+
+-- Imagetables ------------------------------------------------------------------------
+
+test("imagetables: a sheet is cut into cells", function()
+  fake.files["art/tiles-table-16-16.png"] = { width = 64, height = 32 }
+  local it = gfx.imagetable.new("art/tiles")
+  checkEqual(it:getLength(), 8, "four across and two down is eight frames")
+  local first = it:getImage(1)
+  check(first ~= nil, "frame one exists")
+  local w, h = first:getSize()
+  checkEqual(w, 16, "a frame is one cell wide")
+  checkEqual(h, 16, "and one cell high")
+  checkEqual(it[5]._pixelX, 0, "frame five starts the second row")
+  checkEqual(it[5]._pixelY, 16, "one cell down")
+  checkEqual(it[2]._pixelX, 16, "frame two is the next cell across")
+end)
+
+test("imagetables: a name with no sheet and no sequence is an error", function()
+  local ok = pcall(gfx.imagetable.new, "art/missing")
+  check(not ok, "the load fails loudly rather than returning something empty")
+end)
+
 -- Run -------------------------------------------------------------------------------
 
 print("")

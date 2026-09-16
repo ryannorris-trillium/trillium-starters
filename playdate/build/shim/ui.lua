@@ -300,6 +300,13 @@ function module.menuKey(key)
     if menuOpen and #menuItems == 0 then
       print("playdate shim: the menu is empty. Add items with playdate.getSystemMenu()")
     end
+    -- The menu is the browser's nearest thing to the hardware pause, so the
+    -- game is told the same way.
+    if menuOpen then
+      require("shim.input").pause()
+    else
+      require("shim.input").resume()
+    end
     return true
   end
   if not menuOpen then
@@ -322,6 +329,7 @@ function module.menuKey(key)
     end
   elseif key == "a" or key == "escape" then
     menuOpen = false
+    require("shim.input").resume()
   end
   return true
 end

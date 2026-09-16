@@ -5,6 +5,7 @@
 -- on screen.
 
 local ui = require("shim.ui")
+local input = require("shim.input")
 
 local userUpdate = playdate.update
 if type(userUpdate) ~= "function" then
@@ -65,6 +66,8 @@ function playdate.update()
   end
 
   playdate.shim.framesRun = playdate.shim.framesRun + 1
+  -- The SDK calls these just before update, so this does too.
+  input.dispatch()
   userUpdate()
   ui.drawMenu()
 end

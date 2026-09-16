@@ -36,6 +36,13 @@ end
 local files = {}
 fake.files = files
 
+-- The build always ships Playbit's own font, already converted to the format
+-- Love reads, so the stand in has it too.
+files["fonts/Phozon/Phozon.fnt"] = [[info face="Phozon" size=32
+common lineHeight=8
+]]
+files["fonts/Phozon/Phozon-table-8-8.png"] = { width = 72, height = 64 }
+
 local love = {}
 
 -- graphics -------------------------------------------------------------------
@@ -75,6 +82,7 @@ function fake.newImageData(width, height)
   function data:getPixel() return 0, 0, 0, 1 end
   function data:setPixel() end
   function data:replacePixels() end
+  function data:paste() record("imagedata.paste") end
   return data
 end
 
@@ -119,6 +127,16 @@ love.graphics = {
   setColor = function(r, g, b, a) color = { r, g, b, a } end,
   getColor = function() return color[1], color[2], color[3], color[4] end,
   setFont = function() end,
+  newFont = function()
+    return {
+      getWidth = function(self, text) return #tostring(text) * 6 end,
+      getHeight = function() return 12 end,
+      setLineHeight = function() end,
+      getLineHeight = function() return 0 end,
+      typeOf = function(self, kind) return kind == "Font" end,
+    }
+  end,
+  getFont = function() return nil end,
   setCanvas = function(canvas) currentCanvas = canvas end,
   getCanvas = function() return currentCanvas end,
   setShader = function(shader) currentShader = shader end,

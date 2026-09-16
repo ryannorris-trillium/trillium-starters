@@ -112,6 +112,14 @@ end
 pbg.setCanvasScale(2)
 pbg.setWindowSize(400 * 2, 240 * 2)
 
+-- WebGL 1 does not allow a shader setting to carry a starting value, so
+-- dev-web.sh strips the two colours' initialisers out of Playbit's shader.
+-- Send them here instead, once, before anything is drawn. Leaving them unsent
+-- would paint the whole screen in transparent black; hard-coding them into the
+-- shader instead would be simpler, but then display.setInverted, which swaps
+-- them, would have nothing to swap.
+pbg.setColors(pbg.COLOR_WHITE, pbg.COLOR_BLACK)
+
 -- The screen the game starts on ------------------------------------------------
 --
 -- Playbit clears the screen once, on its first frame, with
@@ -524,8 +532,35 @@ end
 gfx.lockFocus = gfx.pushContext
 gfx.unlockFocus = gfx.popContext
 
+-- Do the solid parts of two images actually touch, or only their rectangles?
+-- Both images have to have come from a file: an image drawn into with
+-- pushContext lives on the graphics card, and nothing here can read it back.
+function gfx.checkAlphaCollision(image1, x1, y1, flip1, image2, x2, y2, flip2)
+  if not (module.pixelData(image1) and module.pixelData(image2)) then
+    warn.note("checkAlphaCollision() can only read images loaded from a file, so this one counts as a hit")
+    return true
+  end
+
+  local w1, h1 = image1:getSize()
+  local w2, h2 = image2:getSize()
+  local left = math.max(x1, x2)
+  local top = math.max(y1, y2)
+  local right = math.min(x1 + w1, x2 + w2)
+  local bottom = math.min(y1 + h1, y2 + h2)
+
+  for y = math.floor(top), math.ceil(bottom) - 1 do
+    for x = math.floor(left), math.ceil(right) - 1 do
+      if module.isOpaqueAt(image1, x - x1, y - y1, flip1)
+        and module.isOpaqueAt(image2, x - x2, y - y2, flip2) then
+        return true
+      end
+    end
+  end
+  return false
+end
+
 warn.fill("playdate.graphics.", gfx, {
-  "checkAlphaCollision", "imageWithText", "getTextSizeForMaxWidth",
+  "imageWithText", "getTextSizeForMaxWidth",
   "drawLocalizedText", "getLocalizedText", "drawLocalizedTextAligned",
   "drawLocalizedTextInRect", "perlin", "perlinArray",
 })
@@ -548,9 +583,56 @@ function gfx.image.new(widthOrPath, height, bgcolor)
     if not compat.fileExists(path .. ".png") then
       error("playdate shim: no image file at " .. path .. ".png", 2)
     end
-    return realImageNew(path)
+    local image = realImageNew(path)
+    -- Where the pixels came from, so alphaCollision can read them back off
+    -- the disk rather than off the graphics card, which is impossible here.
+    image._pixelPath = path .. ".png"
+    image._pixelX = 0
+    image._pixelY = 0
+    return image
   end
   return realImageNew(widthOrPath, height, bgcolor)
+end
+
+-- Pixel data, read once per file and kept. This is the processor's copy of
+-- the image, not the graphics card's, so reading it is allowed.
+local pixelCache = {}
+
+function module.pixelData(image)
+  if not image or not image._pixelPath then
+    return nil
+  end
+  local data = pixelCache[image._pixelPath]
+  if data == nil then
+    local ok, loaded = pcall(love.image.newImageData, image._pixelPath)
+    data = ok and loaded or false
+    pixelCache[image._pixelPath] = data
+  end
+  if not data then
+    return nil
+  end
+  return data
+end
+
+-- Is this pixel of the image solid? x and y count from the image's top left,
+-- and flip mirrors them the way the sprite is drawn.
+function module.isOpaqueAt(image, x, y, flip)
+  local data = module.pixelData(image)
+  if not data then
+    return nil
+  end
+  local width, height = image:getSize()
+  if flip == gfx.kImageFlippedX or flip == gfx.kImageFlippedXY then
+    x = width - 1 - x
+  end
+  if flip == gfx.kImageFlippedY or flip == gfx.kImageFlippedXY then
+    y = height - 1 - y
+  end
+  if x < 0 or y < 0 or x >= width or y >= height then
+    return false
+  end
+  local _, _, _, alpha = data:getPixel(x + image._pixelX, y + image._pixelY)
+  return alpha > 0
 end
 
 function imageMeta:copy()
@@ -699,12 +781,90 @@ function gfx.image.imageSizeAtPath(path)
   return data:getWidth(), data:getHeight()
 end
 
+-- SDK code reads image.width and image.height as plain properties as often as
+-- it calls getSize(). Playbit has only the call.
+local imageMethods = imageMeta
+
+imageMeta.__index = function(image, key)
+  if key == "width" then
+    return image.data and image.data:getWidth() or 0
+  end
+  if key == "height" then
+    return image.data and image.data:getHeight() or 0
+  end
+  return imageMethods[key]
+end
+
 -- Imagetables ----------------------------------------------------------------------
 
 -- Playbit only reads "name-table-W-H.png" atlases. The SDK also accepts a
 -- numbered sequence, "name-table-1.png", "name-table-2.png", and so on, which
 -- is what you get by exporting frames one at a time.
-local realImagetableNew = gfx.imagetable.new
+-- Playbit reads a `name-table-16-16.png` sheet by copying every pixel of
+-- every cell one at a time, in Lua. For the sheets a real game ships, a
+-- tileset or a font, that is tens of thousands of calls and a visible pause on
+-- loading. ImageData:paste does the same copy in one step.
+--
+-- Each frame also remembers which part of which file it came from, so
+-- alphaCollision can look its pixels up later.
+local function findSheet(path)
+  local folder, name = string.match(path, "^(.*)/([^/]+)$")
+  if not folder then
+    folder, name = "", path
+  end
+  local pattern = "^" .. string.gsub(name, "([^%w])", "%%%1") ..
+    "%-table%-(%d+)%-(%d+)%.png$"
+  local items = love.filesystem.getDirectoryItems(folder)
+  for i = 1, #items do
+    local width, height = string.match(items[i], pattern)
+    if width then
+      local full = items[i]
+      if folder ~= "" then
+        full = folder .. "/" .. full
+      end
+      return full, tonumber(width), tonumber(height)
+    end
+  end
+  return nil
+end
+
+local function loadGrid(path)
+  local sheetPath, frameWidth, frameHeight = findSheet(path)
+  if not sheetPath or frameWidth < 1 or frameHeight < 1 then
+    return nil
+  end
+
+  local sheet = love.image.newImageData(sheetPath)
+  local columns = math.floor(sheet:getWidth() / frameWidth)
+  local rows = math.floor(sheet:getHeight() / frameHeight)
+
+  local images = {}
+  for row = 0, rows - 1 do
+    for column = 0, columns - 1 do
+      local cellX = column * frameWidth
+      local cellY = row * frameHeight
+      local data = love.image.newImageData(frameWidth, frameHeight)
+      data:paste(sheet, 0, 0, cellX, cellY, frameWidth, frameHeight)
+      local frame = gfx.image.new(frameWidth, frameHeight)
+      frame.data:replacePixels(data)
+      frame._pixelPath = sheetPath
+      frame._pixelX = cellX
+      frame._pixelY = cellY
+      images[#images + 1] = frame
+    end
+  end
+
+  local it = setmetatable({}, imagetableMeta)
+  it._images = images
+  it.length = #images
+  it._rows = rows
+  it._columns = columns
+  it._width = sheet:getWidth()
+  it._height = sheet:getHeight()
+  it._frameWidth = frameWidth
+  it._frameHeight = frameHeight
+  return it
+end
 
 local function sequenceFrames(path)
   local frames = {}
@@ -744,12 +904,12 @@ function gfx.imagetable.new(path, cellsWide, cellSize)
     return it
   end
 
-  local ok, result = pcall(realImagetableNew, path, cellsWide, cellSize)
-  if not ok then
-    error("playdate shim: could not load imagetable '" .. path ..
-      "'. Expected " .. path .. "-table-16-16.png or " .. path .. "-table-1.png", 2)
+  local it = loadGrid(path)
+  if it then
+    return it
   end
-  return result
+  error("playdate shim: could not load imagetable '" .. path ..
+    "'. Expected " .. path .. "-table-16-16.png or " .. path .. "-table-1.png", 2)
 end
 
 function imagetableMeta:setImage(n, image)

@@ -645,6 +645,19 @@ function sprite:checkCollisions(goalX, goalY)
   return ax, ay, collisions, count
 end
 
+-- Do the two sprites' pictures really touch? The collide rects say the boxes
+-- overlap; this says whether any solid pixel does.
+function sprite:alphaCollision(other)
+  if not (self.image and other and other.image) then
+    return true
+  end
+  local x1, y1 = self:getBounds()
+  local x2, y2 = other:getBounds()
+  return gfx.checkAlphaCollision(
+    self.image, x1, y1, self.imageFlip,
+    other.image, x2, y2, other.imageFlip)
+end
+
 -- Drawing ----------------------------------------------------------------------------
 
 -- The default. Sprites with an image draw the image; sprites that override
