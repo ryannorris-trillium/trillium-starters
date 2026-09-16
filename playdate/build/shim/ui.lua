@@ -391,6 +391,19 @@ function playdate.datastore.write(value, filename, prettyPrint)
   love.filesystem.write(filename, jsonParser.encode(value))
 end
 
+-- Playbit's read asks LOVE for the file and lets a missing one fail; in the
+-- browser that failure is logged to the console ("Could not open file ...
+-- Does not exist."). A save that is not there yet is normal, so check first.
+function playdate.datastore.read(filename)
+  filename = (filename or "data") .. ".json"
+  if love.filesystem.getInfo and not love.filesystem.getInfo(filename) then
+    return nil
+  end
+  local str = love.filesystem.read(filename)
+  if str == nil then return nil end
+  return jsonParser.decode(str)
+end
+
 -- Saving an image means encoding its pixels, which means reading them back off
 -- the graphics card, which WebGL 1 will not do.
 warn.fill("playdate.datastore.", playdate.datastore, { "writeImage", "readImage" })
