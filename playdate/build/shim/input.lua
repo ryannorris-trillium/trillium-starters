@@ -34,6 +34,50 @@ local HOLD_SECONDS = 1
 
 local wasDocked = nil
 
+-- Button names -----------------------------------------------------------------
+--
+-- The SDK takes the constants playdate.kButtonA and friends, or the same
+-- things spelled out. Panic's own examples write
+--
+--   if playdate.buttonJustPressed("A") then self:jump() end
+--
+-- with a capital A, and hardware answers. Playbit looks the name up in a table
+-- keyed by the lower case spellings, so a capital found nothing, every test
+-- came back false, and the jump button quietly did nothing at all. Arrow keys
+-- were unaffected, because "left" and "up" have no capitals to get wrong,
+-- which is what made it look like only A and B were broken.
+local function buttonName(button)
+  if type(button) == "string" then
+    return string.lower(button)
+  end
+  return button
+end
+
+module.buttonName = buttonName
+
+local realIsPressed = playdate.buttonIsPressed
+local realJustPressed = playdate.buttonJustPressed
+local realJustReleased = playdate.buttonJustReleased
+
+function playdate.buttonIsPressed(button)
+  return realIsPressed(buttonName(button))
+end
+
+function playdate.buttonJustPressed(button)
+  return realJustPressed(buttonName(button))
+end
+
+function playdate.buttonJustReleased(button)
+  return realJustReleased(buttonName(button))
+end
+
+-- getButtonState answers three questions: is it down now, did it go down this
+-- frame, did it come up this frame. Playbit returns "is it down" twice.
+function playdate.getButtonState(button)
+  local name = buttonName(button)
+  return realIsPressed(name), realJustPressed(name), realJustReleased(name)
+end
+
 -- Input handlers ---------------------------------------------------------------
 --
 -- A handler is a table of the same callbacks under the same names, pushed on

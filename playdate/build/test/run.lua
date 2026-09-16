@@ -834,17 +834,77 @@ test("the system menu holds items and A activates them", function()
   checkEqual(ui.menuIsOpen(), true, "M opens the menu")
   ui.menuKey("s")
   checkEqual(pressed, 1, "A ran the first item")
+  -- Hardware hides the menu and unpauses when a plain item is chosen.
+  checkEqual(ui.menuIsOpen(), false, "choosing a plain item closes the menu")
+
+  ui.menuKey("m")
   ui.menuKey("down")
   ui.menuKey("s")
   checkEqual(checkValue, false, "A toggled the checkmark")
+  checkEqual(ui.menuIsOpen(), true, "a checkmark is changed in place, so the menu stays up")
   ui.menuKey("down")
   ui.menuKey("s")
   checkEqual(optionValue, "fast", "A stepped the options item")
+  checkEqual(ui.menuIsOpen(), true, "and so is a list of options")
   ui.menuKey("m")
   checkEqual(ui.menuIsOpen(), false, "M closes it again")
 
   menu:removeAllMenuItems()
   checkEqual(#menu:getMenuItems(), 0, "items cleared")
+end)
+
+test("the menu pauses the game and leaves no mark behind", function()
+  local ui = playdate.shim.ui
+  local ran = 0
+  local realUpdate = playdate.update
+  playdate.update = function() ran = ran + 1 end
+
+  playdate.display.setRefreshRate(0)
+  playdate.update()
+  checkEqual(ran, 1, "a normal frame runs the game")
+
+  -- Wrapping playdate.update again is what shim/post.lua does, so reload it
+  -- to pick up the stand in above.
+  package.loaded["shim.post"] = nil
+  require("shim.post")
+
+  ran = 0
+  playdate.update()
+  local before = ran
+  ui.menuKey("m")
+  playdate.update()
+  playdate.update()
+  checkEqual(ran, before, "the game does not advance while the menu is open")
+  ui.menuKey("m")
+  playdate.update()
+  check(ran > before, "and starts again when it closes")
+
+  fake.clearLog()
+  checkEqual(ui.takeJustClosed(), false, "the repaint is asked for once and only once")
+
+  playdate.display.setRefreshRate(30)
+  playdate.update = realUpdate
+  package.loaded["shim.post"] = nil
+  require("shim.post")
+end)
+
+test("buttons: the SDK's capital A and B are the same buttons", function()
+  local asked = {}
+  local realIsPressed = playdate.buttonIsPressed
+  -- shim/input.lua wraps Playbit's lookup; this checks what reaches it.
+  checkEqual(playdate.shim.input.buttonName("A"), "a", "capital A is the A button")
+  checkEqual(playdate.shim.input.buttonName("B"), "b", "capital B is the B button")
+  checkEqual(playdate.shim.input.buttonName("Up"), "up", "and a capitalised direction still works")
+  checkEqual(playdate.shim.input.buttonName(playdate.kButtonA), "a", "the constant is unchanged")
+  checkEqual(playdate.shim.input.buttonName("left"), "left", "and so is a name already in lower case")
+
+  -- The three queries and getButtonState all go through it.
+  checkEqual(playdate.buttonIsPressed("A"), false, "an unpressed capital A answers false, not nil")
+  checkEqual(playdate.buttonJustPressed("B"), false, "and so does capital B")
+  local down, pressed, released = playdate.getButtonState("A")
+  checkEqual(down, false, "getButtonState says it is not down")
+  checkEqual(pressed, false, "nor just pressed")
+  checkEqual(released, false, "nor just released")
 end)
 
 test("display reports the Playdate screen and holds a refresh rate", function()

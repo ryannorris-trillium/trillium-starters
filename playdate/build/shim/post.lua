@@ -65,6 +65,14 @@ function playdate.update()
     return
   end
 
+  -- The menu covered part of the screen. A game that repaints every pixel
+  -- every frame does not care, but a sprite game repaints only where its
+  -- sprites are, so without this the menu stays printed on the screen after
+  -- it closes.
+  if ui.takeJustClosed() then
+    playdate.graphics.clear()
+  end
+
   playdate.shim.framesRun = playdate.shim.framesRun + 1
   -- The SDK calls these just before update, so this does too.
   input.dispatch()

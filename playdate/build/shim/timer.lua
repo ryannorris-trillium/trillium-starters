@@ -244,6 +244,15 @@ playdate.timer = buildTimerModule(function()
   return delta
 end)
 
+-- While the system menu is open the game is paused and updateTimers is never
+-- called, but the clock keeps going. Without this the first frame after the
+-- menu closes is handed the whole length of the pause and every timer in the
+-- game jumps forward by it. shim/ui.lua calls this when the menu closes: as
+-- far as the timers are concerned the pause did not happen.
+function playdate.shim.forgetPausedTime()
+  lastTime = nil
+end
+
 -- Frames. One call to updateTimers is one frame, whatever the clock says.
 playdate.frameTimer = buildTimerModule(function()
   return 1

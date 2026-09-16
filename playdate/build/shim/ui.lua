@@ -304,20 +304,47 @@ function module.menuIsOpen()
   return menuOpen
 end
 
+-- True for one frame after the menu closes: the screen under it has to be
+-- repainted. A game that draws every pixel every frame does that anyway, but a
+-- sprite game only repaints where its sprites are, so the menu would be left
+-- printed on the screen for good.
+local menuJustClosed = false
+
+function module.closeMenu()
+  if not menuOpen then
+    return
+  end
+  menuOpen = false
+  menuJustClosed = true
+  -- The clock kept running while the game did not. Without this the first
+  -- frame back is handed the whole length of the pause and every timer in the
+  -- game jumps forward by it.
+  if playdate.shim.forgetPausedTime then
+    playdate.shim.forgetPausedTime()
+  end
+  require("shim.input").resume()
+end
+
+function module.takeJustClosed()
+  local was = menuJustClosed
+  menuJustClosed = false
+  return was
+end
+
 -- M opens and closes the menu, up and down move, A chooses, B closes. The game
 -- stops while it is open, which is what the hardware does.
 function module.menuKey(key)
   if key == "m" then
-    menuOpen = not menuOpen
-    if menuOpen and #menuItems == 0 then
-      print("playdate shim: the menu is empty. Add items with playdate.getSystemMenu()")
-    end
-    -- The menu is the browser's nearest thing to the hardware pause, so the
-    -- game is told the same way.
     if menuOpen then
-      require("shim.input").pause()
+      module.closeMenu()
     else
-      require("shim.input").resume()
+      menuOpen = true
+      if #menuItems == 0 then
+        print("playdate shim: the menu is empty. Add items with playdate.getSystemMenu()")
+      end
+      -- The menu is the browser's nearest thing to the hardware pause, so the
+      -- game is told the same way.
+      require("shim.input").pause()
     end
     return true
   end
@@ -338,12 +365,33 @@ function module.menuKey(key)
     local item = menuItems[menuSelection]
     if item then
       item:_activate()
+      -- Hardware closes the menu and unpauses when a plain item is chosen. A
+      -- checkmark or a list of options is changed in place, so the menu stays
+      -- up and you can see what it changed to.
+      if item.kind ~= "checkmark" and item.kind ~= "options" then
+        module.closeMenu()
+      end
     end
   elseif key == "a" or key == "escape" then
-    menuOpen = false
-    require("shim.input").resume()
+    module.closeMenu()
   end
   return true
+end
+
+-- The menu belongs to the screen, not to the world. A game with a camera has
+-- set a draw offset, and may have left a clip rect on, and everything drawn
+-- goes through both: in Level 1-1 the menu slid off to the left with the
+-- level. So the offset and the clip come off for as long as the menu is on
+-- screen, and go back afterwards.
+local function drawPinnedToScreen(draw)
+  local offsetX, offsetY = pbg.drawOffset.x, pbg.drawOffset.y
+  local clipX, clipY, clipWidth, clipHeight = love.graphics.getScissor()
+  love.graphics.push()
+  love.graphics.translate(-offsetX, -offsetY)
+  love.graphics.setScissor()
+  draw()
+  love.graphics.setScissor(clipX, clipY, clipWidth, clipHeight)
+  love.graphics.pop()
 end
 
 function module.drawMenu()
@@ -354,35 +402,57 @@ function module.drawMenu()
   local x, y = 90, 24
   local width, height = 280, 192
   local previousMode = gfx.getImageDrawMode()
+  local previousColor = pbg.drawColorIndex
+  local previousPattern = pbg.drawPattern
 
-  gfx.setColor(gfx.kColorWhite)
-  gfx.fillRect(x, y, width, height)
-  gfx.setColor(gfx.kColorBlack)
-  gfx.drawRect(x, y, width, height)
-  gfx.drawLine(x, y + 26, x + width, y + 26)
+  -- The menu belongs to the system, and so does the font it is written in.
+  -- Borrowing whatever font the game left set is wrong even when it works:
+  -- Level 1-1's font holds the ten digits and nothing else, because a score is
+  -- all it ever draws with it, so every letter of this menu came out blank and
+  -- the menu looked empty.
+  local previousFont = pbg.activeFont
+  gfx.setFont(pbg.fallbackFont)
 
-  gfx.setImageDrawMode(gfx.kDrawModeCopy)
-  gfx.drawText("Menu", x + 10, y + 6)
+  drawPinnedToScreen(function()
+    gfx.setColor(gfx.kColorWhite)
+    gfx.fillRect(x, y, width, height)
+    gfx.setColor(gfx.kColorBlack)
+    gfx.drawRect(x, y, width, height)
+    gfx.drawLine(x, y + 26, x + width, y + 26)
 
-  if #menuItems == 0 then
-    gfx.drawText("no items", x + 10, y + 36)
-  end
+    gfx.setImageDrawMode(gfx.kDrawModeCopy)
+    gfx.drawText("System Menu", x + 10, y + 6)
 
-  for i = 1, #menuItems do
-    local rowY = y + 26 + (i - 1) * 22
-    if i == menuSelection then
-      gfx.setColor(gfx.kColorBlack)
-      gfx.fillRect(x + 1, rowY + 2, width - 2, 22)
-      gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-    else
-      gfx.setImageDrawMode(gfx.kDrawModeCopy)
+    if #menuItems == 0 then
+      gfx.drawText("This game adds no", x + 10, y + 38)
+      gfx.drawText("menu items.", x + 10, y + 58)
     end
-    gfx.drawText(menuItems[i]:_displayText(), x + 10, rowY + 6)
-  end
 
-  gfx.setImageDrawMode(gfx.kDrawModeCopy)
-  gfx.drawText("M closes", x + 10, y + height - 22)
+    for i = 1, #menuItems do
+      local rowY = y + 26 + (i - 1) * 22
+      if i == menuSelection then
+        gfx.setColor(gfx.kColorBlack)
+        gfx.fillRect(x + 1, rowY + 2, width - 2, 22)
+        gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+      else
+        gfx.setImageDrawMode(gfx.kDrawModeCopy)
+      end
+      gfx.drawText(menuItems[i]:_displayText(), x + 10, rowY + 6)
+    end
+
+    gfx.setImageDrawMode(gfx.kDrawModeCopy)
+    -- The built in font has no comma, so do not write one.
+    gfx.drawText("Press M to close. The", x + 10, y + height - 44)
+    gfx.drawText("game is paused.", x + 10, y + height - 24)
+  end)
+
   gfx.setImageDrawMode(previousMode)
+  gfx.setColor(previousColor)
+  gfx.setPattern(previousPattern)
+  pbg.activeFont = previousFont
+  if previousFont and previousFont.data then
+    love.graphics.setFont(previousFont.data)
+  end
 end
 
 -- json and datastore ------------------------------------------------------------
