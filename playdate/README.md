@@ -16,7 +16,8 @@ If the tab opens but nothing loads: in the **Ports** tab, right-click port 3000
 → **Port Visibility** → **Public**, then refresh.
 
 If you get a blue error screen instead of the game, the message on it is a real
-Lua error. Read the top line, fix `source/main.lua`, run the script again.
+Lua error. Read the top line, fix `source/main.lua`, run the script again. The
+browser calls your file `game.lua`, so that is the name in the error.
 
 ## What you are actually writing
 
@@ -30,13 +31,37 @@ color. That constraint is the whole point of the machine.
 
 The browser version runs on [Playbit](https://github.com/GamesRightMeow/playbit),
 which rewrites the Playdate API on top of Love2D so it can run anywhere. Playbit
-covers drawing, buttons, the crank, images, and fonts. It does not cover
-sprites, so `playdate.graphics.sprite` will not work here. Draw with shapes.
+does not cover the whole SDK, so `playdate/build/shim/` adds the missing pieces
+on top: sprites and collisions, animators, frame timers, a synth, the system
+menu, and more. Between the two, most of what the SDK documentation describes
+works in the tab.
 
 A real Playdate has a crank on its side. A Chromebook does not, so the block at
 the bottom of `source/main.lua` turns `,` and `.` into crank rotation for the
 browser. That block is marked `!if LOVE2D`, which means the build system deletes
 it when it compiles for the real hardware.
+
+## What works in the browser
+
+Write against the real SDK documentation,
+[Inside Playdate](https://sdk.play.date/Inside%20Playdate.html). Most of it
+works here, `playdate.graphics.sprite` and collisions included.
+
+Some of it cannot work in a tab. When you call one of those, the game keeps
+running and the console prints one line saying what it was:
+
+```
+playdate shim: image:setMaskImage() does nothing here; Playbit has no mask support
+```
+
+The full list, area by area, honest about what is faked:
+[docs/api-coverage.md](docs/api-coverage.md). The short version of what is
+missing is image masks, tilemaps, `playdate.ui.gridview`, the pathfinder, sound
+effects and sequences, and the accelerometer.
+
+Two things the browser adds. Press `M` for the system menu, then up and down to
+move and `S` to choose. And the game is held to the Playdate's 30 frames a
+second, so it runs at the same speed here as it does on the hardware.
 
 ## Make it yours
 
@@ -75,6 +100,23 @@ Count frames in a variable, add one each `playdate.update()`, and draw
 at 30 frames per second. When it hits zero, stop adding to the score.
 
 Then commit: Source Control, message `playdate game`, Commit, Sync Changes.
+
+## A bigger example: sprites
+
+`examples/sprites/main.lua` is a second game built out of the parts the starter
+does not use: sprites, walls you slide along, a prize you collect, a beep from a
+synth, a title that bounces in on an animator, the crank prompt, and a best
+score that is saved and comes back next time.
+
+Keep a copy of your own game first, then swap it in:
+
+```
+cp playdate/source/main.lua playdate/source/main-backup.lua
+cp playdate/examples/sprites/main.lua playdate/source/main.lua
+bash playdate/dev-web.sh
+```
+
+To go back, copy `main-backup.lua` over `source/main.lua` again.
 
 ## Optional: put it on a real Playdate
 
