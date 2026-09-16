@@ -135,14 +135,23 @@ function sprite:getCenter()
   return self.centerX, self.centerY
 end
 
+-- Anywhere the SDK takes an x and a y it also takes a point, and SDK code
+-- uses both. One helper, used by every move.
+local function coordinates(x, y)
+  if type(x) == "table" then
+    return x.x, x.y
+  end
+  return x, y
+end
+
 function sprite:moveTo(x, y)
-  self.x = x
-  self.y = y
+  self.x, self.y = coordinates(x, y)
 end
 
 function sprite:moveBy(dx, dy)
-  self.x = self.x + dx
-  self.y = self.y + dy
+  local ax, ay = coordinates(dx, dy)
+  self.x = self.x + ax
+  self.y = self.y + ay
 end
 
 function sprite:getPosition()
@@ -543,11 +552,12 @@ local function axisPass(self, others, collisions, seen, axis, from, to)
   local resolved = to
   local frozen = false
   if blocker then
-    -- Already inside something before the move started: stay put rather than
-    -- shoving the sprite backwards out of it.
-    if (delta > 0 and blockerContact < from) or (delta < 0 and blockerContact > from) then
-      blockerContact = from
-    end
+    -- The contact point can be behind where the move started, which means the
+    -- sprite was already inside the other one. Hardware pushes it out, and so
+    -- does this: a player standing on a floor whose top edge does not fall on
+    -- a whole tile is a pixel or two inside it, and a sprite that is left
+    -- there can never move sideways again, because the floor it is standing
+    -- in blocks every step.
     if blockerResponse == sprite.kCollisionTypeBounce then
       resolved = blockerContact - (to - blockerContact)
     else
@@ -560,21 +570,36 @@ local function axisPass(self, others, collisions, seen, axis, from, to)
 
   for i = 1, #hits do
     local hit = hits[i]
-    if not seen[hit.other] then
-      seen[hit.other] = true
-      local normalX, normalY = 0, 0
-      if hit.other == blocker then
-        if axis == "x" then
-          normalX = delta > 0 and -1 or 1
-        else
-          normalY = delta > 0 and -1 or 1
-        end
+    local normalX, normalY = 0, 0
+    if hit.other == blocker then
+      if axis == "x" then
+        normalX = delta > 0 and -1 or 1
+      else
+        normalY = delta > 0 and -1 or 1
       end
-      local ti = 0
-      if delta ~= 0 then
-        ti = (resolved - from) / delta
+    end
+    local ti = 0
+    if delta ~= 0 then
+      ti = (resolved - from) / delta
+    end
+
+    local already = seen[hit.other]
+    if already then
+      -- The other axis has already reported this one. A sprite standing on a
+      -- floor moves only downwards, so the sideways pass sees the floor first
+      -- and has no direction to report; the pass that actually stopped the
+      -- sprite does, and that is the answer the game wants. Without this,
+      -- every floor came back with a normal of 0, 0 and nothing could tell
+      -- that it had landed.
+      if normalX ~= 0 and already.normal.x == 0 then
+        already.normal.x = normalX
+        already.ti = ti
       end
-      collisions[#collisions + 1] = {
+      if normalY ~= 0 and already.normal.y == 0 then
+        already.normal.y = normalY
+      end
+    else
+      local entry = {
         sprite = self,
         other = hit.other,
         type = hit.response,
@@ -589,6 +614,8 @@ local function axisPass(self, others, collisions, seen, axis, from, to)
         x = self.x,
         y = self.y,
       }
+      seen[hit.other] = entry
+      collisions[#collisions + 1] = entry
     end
   end
 
@@ -668,7 +695,25 @@ local function drawOne(s)
   local bx, by = s:getBounds()
   bx = math.floor(bx)
   by = math.floor(by)
-  if s.draw ~= sprite.draw then
+
+  -- A sprite that ignores the draw offset is pinned to the screen rather than
+  -- to the world: a score, a life counter, anything that should not scroll
+  -- with the camera. Everything is drawn through the offset, so take it back
+  -- off again for this one.
+  local pinned = s.ignoresDrawOffset
+  local offsetX, offsetY = 0, 0
+  if pinned then
+    offsetX, offsetY = pbg.drawOffset.x, pbg.drawOffset.y
+    love.graphics.push()
+    love.graphics.translate(-offsetX, -offsetY)
+  end
+  if s.tilemap then
+    -- A tilemap sprite draws the map at its own top left corner.
+    love.graphics.push()
+    love.graphics.translate(bx, by)
+    s.tilemap:draw(0, 0)
+    love.graphics.pop()
+  elseif s.draw ~= sprite.draw then
     if s.width <= 0 or s.height <= 0 then
       return
     end
@@ -678,7 +723,8 @@ local function drawOne(s)
     local clipX, clipY, clipWidth, clipHeight = love.graphics.getScissor()
     love.graphics.push()
     love.graphics.translate(bx, by)
-    love.graphics.setScissor(bx + pbg.drawOffset.x, by + pbg.drawOffset.y, s.width, s.height)
+    love.graphics.setScissor(bx + pbg.drawOffset.x - offsetX, by + pbg.drawOffset.y - offsetY,
+      s.width, s.height)
     s:draw(0, 0, s.width, s.height)
     love.graphics.setScissor(clipX, clipY, clipWidth, clipHeight)
     love.graphics.pop()
@@ -688,6 +734,10 @@ local function drawOne(s)
     else
       s.image:draw(bx, by, s.imageFlip)
     end
+  end
+
+  if pinned then
+    love.graphics.pop()
   end
 end
 
@@ -722,6 +772,10 @@ function sprite.redraw()
         rects[#rects + 1] = s._lastBounds
       end
       local bx, by, bw, bh = s:getBounds()
+      if s.ignoresDrawOffset then
+        bx = bx - pbg.drawOffset.x
+        by = by - pbg.drawOffset.y
+      end
       rects[#rects + 1] = { x = math.floor(bx), y = math.floor(by), width = bw, height = bh }
     end
     eraseRects(rects)
@@ -742,6 +796,10 @@ function sprite.redraw()
   for i = 1, #order do
     local s = order[i]
     local bx, by, bw, bh = s:getBounds()
+    if s.ignoresDrawOffset then
+      bx = bx - pbg.drawOffset.x
+      by = by - pbg.drawOffset.y
+    end
     s._lastBounds = { x = math.floor(bx), y = math.floor(by), width = bw, height = bh }
     if s.visible then
       drawOne(s)
@@ -785,8 +843,8 @@ function sprite.addEmptyCollisionSprite(x, y, width, height)
   return s
 end
 
-warn.fill("playdate.graphics.sprite.", sprite, {
-  "addWallSprites", "setTilemap", "setStencil",
-})
+-- addWallSprites, setTilemap and getTilemap are added by shim/tilemap.lua,
+-- which loads after this file.
+warn.fill("playdate.graphics.sprite.", sprite, { "setStencil" })
 
 return sprite

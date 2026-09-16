@@ -1204,6 +1204,104 @@ test("imagetables: a name with no sheet and no sequence is an error", function()
   check(not ok, "the load fails loudly rather than returning something empty")
 end)
 
+-- Tilemaps ---------------------------------------------------------------------------
+
+local function newTestTilemap(width, height)
+  fake.files["art/tiles-table-16-16.png"] = { width = 64, height = 32 }
+  local map = gfx.tilemap.new()
+  map:setImageTable(gfx.imagetable.new("art/tiles"))
+  map:setSize(width, height)
+  return map
+end
+
+test("tilemaps: a tile is found where it was put", function()
+  local map = newTestTilemap(4, 3)
+  map:setTileAtPosition(2, 3, 7)
+  map:setTileAtPosition(3, 2, 9)
+  checkEqual(map:getTileAtPosition(2, 3), 7, "column 2 row 3")
+  checkEqual(map:getTileAtPosition(3, 2), 9, "column 3 row 2 is a different cell")
+  checkEqual(map:getTileAtPosition(1, 1), 0, "an untouched cell is empty")
+  checkEqual(map:getTileAtPosition(5, 1), nil, "off the right hand edge is nothing")
+  checkEqual(map:getTileAtPosition(1, 9), nil, "and so is below the bottom")
+end)
+
+test("tilemaps: sizes", function()
+  local map = newTestTilemap(4, 3)
+  local width, height = map:getSize()
+  checkEqual(width, 4, "four columns")
+  checkEqual(height, 3, "three rows")
+  local tileWidth, tileHeight = map:getTileSize()
+  checkEqual(tileWidth, 16, "a tile is the imagetable's cell width")
+  local pixelWidth, pixelHeight = map:getPixelSize()
+  checkEqual(pixelWidth, 64, "four tiles of sixteen across")
+  checkEqual(pixelHeight, 48, "three down")
+end)
+
+test("tilemaps: setTiles fills the grid in reading order", function()
+  local map = newTestTilemap(3, 2)
+  map:setTiles({ 1, 2, 3, 4, 5, 6 }, 3)
+  checkEqual(map:getTileAtPosition(1, 1), 1, "first cell")
+  checkEqual(map:getTileAtPosition(3, 1), 3, "end of the first row")
+  checkEqual(map:getTileAtPosition(1, 2), 4, "start of the second row")
+  local tiles, width = map:getTiles()
+  checkEqual(width, 3, "getTiles says how wide it is")
+  checkEqual(#tiles, 6, "and hands back every cell")
+end)
+
+test("tilemaps: solid tiles group into as few rectangles as possible", function()
+  local map = newTestTilemap(4, 3)
+  -- A solid floor along the bottom row, and nothing else.
+  for column = 1, 4 do
+    map:setTileAtPosition(column, 3, 5)
+  end
+  local rects = map:getCollisionRects()
+  checkEqual(#rects, 1, "one rectangle, not four")
+  checkEqual(rects[1].x, 1, "starting at the first column")
+  checkEqual(rects[1].y, 3, "on the third row")
+  checkEqual(rects[1].width, 4, "four tiles wide")
+  checkEqual(rects[1].height, 1, "one tile high")
+end)
+
+test("tilemaps: a square block is one rectangle, and gaps split it", function()
+  local map = newTestTilemap(4, 3)
+  for column = 1, 2 do
+    for row = 1, 2 do
+      map:setTileAtPosition(column, row, 1)
+    end
+  end
+  map:setTileAtPosition(4, 1, 1)
+  local rects = map:getCollisionRects()
+  checkEqual(#rects, 2, "the block and the lone tile")
+  checkEqual(rects[1].width, 2, "the block is two wide")
+  checkEqual(rects[1].height, 2, "and two high")
+end)
+
+test("tilemaps: emptyIDs are treated as nothing there", function()
+  local map = newTestTilemap(3, 1)
+  map:setTileAtPosition(1, 1, 1)
+  map:setTileAtPosition(2, 1, 2)
+  map:setTileAtPosition(3, 1, 1)
+  checkEqual(#map:getCollisionRects(), 1, "with nothing excluded the row is one rectangle")
+  local rects = map:getCollisionRects({ 2 })
+  checkEqual(#rects, 2, "excluding tile 2 splits the row in two")
+end)
+
+test("tilemaps: wall sprites land on tile boundaries", function()
+  local map = newTestTilemap(4, 3)
+  for column = 1, 4 do
+    map:setTileAtPosition(column, 3, 5)
+  end
+  gfx.sprite.removeAll()
+  local walls = gfx.sprite.addWallSprites(map)
+  checkEqual(#walls, 1, "one wall sprite for the floor")
+  local x, y, width, height = walls[1]:getBounds()
+  checkEqual(x, 0, "the first column starts at zero, not at one tile in")
+  checkEqual(y, 32, "the third row starts two tiles down")
+  checkEqual(width, 64, "four tiles wide in pixels")
+  checkEqual(height, 16, "one tile high in pixels")
+  gfx.sprite.removeAll()
+end)
+
 -- Run -------------------------------------------------------------------------------
 
 print("")

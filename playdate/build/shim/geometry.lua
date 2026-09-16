@@ -182,6 +182,30 @@ function vectorMeta:angleBetween(v)
   return math.deg(math.acos(cos))
 end
 
+-- A vector2D holds dx and dy, and hardware answers to x and y as well. SDK
+-- code uses both spellings, sometimes in the same file, so both work here.
+local vectorMethods = vectorMeta
+
+vectorMeta.__index = function(vector, key)
+  if key == "x" then
+    return rawget(vector, "dx")
+  end
+  if key == "y" then
+    return rawget(vector, "dy")
+  end
+  return vectorMethods[key]
+end
+
+vectorMeta.__newindex = function(vector, key, value)
+  if key == "x" then
+    rawset(vector, "dx", value)
+  elseif key == "y" then
+    rawset(vector, "dy", value)
+  else
+    rawset(vector, key, value)
+  end
+end
+
 -- Line segments ----------------------------------------------------------------
 
 function geom.lineSegment.fast_intersection(x1, y1, x2, y2, x3, y3, x4, y4)
