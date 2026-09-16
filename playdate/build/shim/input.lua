@@ -34,7 +34,37 @@ local HOLD_SECONDS = 1
 
 local wasDocked = nil
 
+-- Input handlers ---------------------------------------------------------------
+--
+-- A handler is a table of the same callbacks under the same names, pushed on
+-- top of the ones on playdate itself. A menu can push its own controls, and
+-- pop them again when it closes, without the game underneath having to know.
+-- Pushing with masksPreviousHandlers stops the search there, so a button the
+-- handler does not answer does nothing at all rather than falling through.
+local handlers = {}
+
+playdate.inputHandlers = playdate.inputHandlers or {}
+
+function playdate.inputHandlers.push(handler, masksPreviousHandlers)
+  handlers[#handlers + 1] = { handler = handler, masks = masksPreviousHandlers }
+end
+
+function playdate.inputHandlers.pop()
+  handlers[#handlers] = nil
+end
+
 local function call(name, ...)
+  for i = #handlers, 1, -1 do
+    local entry = handlers[i]
+    local fn = entry.handler[name]
+    if type(fn) == "function" then
+      fn(...)
+      return
+    end
+    if entry.masks then
+      return
+    end
+  end
   local fn = playdate[name]
   if type(fn) == "function" then
     fn(...)

@@ -1302,6 +1302,91 @@ test("tilemaps: wall sprites land on tile boundaries", function()
   gfx.sprite.removeAll()
 end)
 
+-- Input handlers, scale, envelopes ----------------------------------------------------
+
+test("input handlers: the top of the stack answers first", function()
+  local realJustPressed = playdate.buttonJustPressed
+  local realJustReleased = playdate.buttonJustReleased
+  local pressed = nil
+  playdate.buttonJustPressed = function(button) return button == pressed end
+  playdate.buttonJustReleased = function() return false end
+
+  local heard = {}
+  playdate.AButtonDown = function() heard[#heard + 1] = "game" end
+
+  pressed = playdate.kButtonA
+  playdate.shim.input.dispatch()
+  checkEqual(heard[#heard], "game", "with nothing pushed the game hears it")
+
+  playdate.inputHandlers.push({ AButtonDown = function() heard[#heard + 1] = "menu" end })
+  playdate.shim.input.dispatch()
+  checkEqual(heard[#heard], "menu", "a pushed handler takes it instead")
+
+  -- A handler with no answer for this button lets it through, unless it masks.
+  playdate.inputHandlers.push({ BButtonDown = function() end })
+  playdate.shim.input.dispatch()
+  checkEqual(heard[#heard], "menu", "a handler that does not answer falls through to the one below")
+
+  playdate.inputHandlers.pop()
+  playdate.inputHandlers.pop()
+  playdate.inputHandlers.push({ BButtonDown = function() end }, true)
+  local before = #heard
+  playdate.shim.input.dispatch()
+  checkEqual(#heard, before, "a masking handler swallows what it does not answer")
+  playdate.inputHandlers.pop()
+
+  playdate.shim.input.dispatch()
+  checkEqual(heard[#heard], "game", "and the game hears it again once everything is popped")
+
+  playdate.AButtonDown = nil
+  playdate.buttonJustPressed = realJustPressed
+  playdate.buttonJustReleased = realJustReleased
+end)
+
+test("display: setScale shrinks the drawing area", function()
+  checkEqual(playdate.display.getWidth(), 400, "a Playdate screen is 400 across")
+  playdate.display.setScale(2)
+  checkEqual(playdate.display.getWidth(), 200, "at 2x the game draws into half of that")
+  checkEqual(playdate.display.getHeight(), 120, "and half the height")
+  checkEqual(playdate.display.getScale(), 2, "and says so")
+  playdate.display.setScale(1)
+  checkEqual(playdate.display.getWidth(), 400, "back to the whole screen")
+end)
+
+test("synth: the envelope shapes the note", function()
+  local shape = playdate.sound.shimEnvelopeAt
+  local adsr = { attack = 0.1, decay = 0.1, sustain = 0.5, release = 0.2 }
+  checkEqual(shape(0, 1, adsr), 0, "silent at the very start")
+  checkEqual(shape(0.05, 1, adsr), 0.5, "halfway up the attack")
+  checkEqual(shape(0.1, 1, adsr), 1, "loudest at the end of the attack")
+  checkEqual(shape(0.2, 1, adsr), 0.5, "down to the sustain level after the decay")
+  checkEqual(shape(0.5, 1, adsr), 0.5, "and holds there")
+  checkEqual(shape(0.8, 1, adsr), 0.5, "until the release starts")
+  checkEqual(shape(0.9, 1, adsr), 0.25, "and halfway through the release it is half of that")
+  checkEqual(shape(1, 1, adsr), 0, "silent again at the end")
+end)
+
+test("synth: a note shorter than its envelope still fits", function()
+  local shape = playdate.sound.shimEnvelopeAt
+  local adsr = { attack = 1, decay = 1, sustain = 0.5, release = 1 }
+  local level = shape(0.05, 0.1, adsr)
+  check(level >= 0 and level <= 1, "the level stays between silence and full")
+  checkEqual(shape(0.1, 0.1, adsr), 0, "and the note still ends silent")
+end)
+
+test("synth: setADSR is remembered", function()
+  local voice = playdate.sound.synth.new(playdate.sound.kWaveSquare)
+  voice:setADSR(0.01, 0.02, 0.3, 0.4)
+  local a, d, sustain, r = voice:getADSR()
+  checkEqual(a, 0.01, "attack")
+  checkEqual(d, 0.02, "decay")
+  checkEqual(sustain, 0.3, "sustain")
+  checkEqual(r, 0.4, "release")
+  local copy = voice:copy()
+  local _, _, copiedSustain = copy:getADSR()
+  checkEqual(copiedSustain, 0.3, "and copied with the synth")
+end)
+
 -- Run -------------------------------------------------------------------------------
 
 print("")

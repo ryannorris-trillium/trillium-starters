@@ -21,21 +21,22 @@ package.loaded["playdate.display"] = display
 local refreshRate = 30
 local inverted = false
 local displayScale = 1
+local previousScale = 1
 
 function display.getWidth()
-  return SCREEN_WIDTH
+  return SCREEN_WIDTH / displayScale
 end
 
 function display.getHeight()
-  return SCREEN_HEIGHT
+  return SCREEN_HEIGHT / displayScale
 end
 
 function display.getSize()
-  return SCREEN_WIDTH, SCREEN_HEIGHT
+  return display.getWidth(), display.getHeight()
 end
 
 function display.getRect()
-  return playdate.geometry.rect.new(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+  return playdate.geometry.rect.new(0, 0, display.getWidth(), display.getHeight())
 end
 
 -- The real hardware runs at 30 frames a second. A browser tab runs at 60, so
@@ -72,9 +73,20 @@ function display.getOffset()
   return gfx.getDrawOffset()
 end
 
+-- setScale(2) turns the screen into 200 by 120 fat pixels: the game draws
+-- into a quarter of the area and every pixel comes out twice the size. That
+-- is a smaller canvas drawn larger, which is exactly what Playbit's canvas
+-- scale already does, so the browser build can do it for real.
 function display.setScale(scale)
+  if scale ~= 1 and scale ~= 2 and scale ~= 4 and scale ~= 8 then
+    warn.note("display.setScale() takes 1, 2, 4 or 8; anything else is ignored")
+    return
+  end
   displayScale = scale
-  warn.note("display.setScale() is ignored here; the browser always draws at 1x")
+  local browserScale = pbg.getCanvasScale() / previousScale
+  previousScale = scale
+  pbg.setCanvasSize(SCREEN_WIDTH / scale, SCREEN_HEIGHT / scale)
+  pbg.setCanvasScale(browserScale * scale)
 end
 
 function display.getScale()

@@ -286,8 +286,64 @@ end
 -- Building 44100 samples a second is not free, so keep each note around.
 local toneCache = {}
 
-local function buildTone(waveform, frequency, length)
-  local key = waveform .. ":" .. string.format("%.2f", frequency) .. ":" .. string.format("%.3f", length)
+-- Attack, decay, sustain, release: how loud the note is over its life. It
+-- rises over the attack, falls to the sustain level over the decay, holds
+-- there, then fades out over the release. A plucked string is a fast attack
+-- and a long release; an organ is all sustain. The Playdate shapes this
+-- continuously; here the shape is drawn into the samples when the note is
+-- built, which sounds the same for a note of a known length.
+--
+-- Whatever the game asks for, a note always gets a tiny ramp at each end,
+-- because a waveform that starts or stops at full height clicks.
+local MIN_RAMP = 0.004
+
+local function envelopeAt(seconds, length, adsr)
+  local attack = math.max(adsr.attack, MIN_RAMP)
+  local decay = adsr.decay
+  local sustain = adsr.sustain
+  local release = math.max(adsr.release, MIN_RAMP)
+
+  -- A short note cannot hold every stage, so squeeze them to fit.
+  local total = attack + decay + release
+  if total > length then
+    local squeeze = length / total
+    attack = attack * squeeze
+    decay = decay * squeeze
+    release = release * squeeze
+  end
+
+  local level
+  if seconds < attack then
+    level = seconds / attack
+  elseif seconds < attack + decay then
+    level = 1 - (1 - sustain) * ((seconds - attack) / decay)
+  else
+    level = sustain
+  end
+
+  local fromEnd = length - seconds
+  if fromEnd < release then
+    level = level * (fromEnd / release)
+  end
+
+  if level < 0 then
+    return 0
+  end
+  return level
+end
+
+sound.shimEnvelopeAt = envelopeAt
+
+local function buildTone(waveform, frequency, length, adsr)
+  local key = table.concat({
+    waveform,
+    string.format("%.2f", frequency),
+    string.format("%.3f", length),
+    string.format("%.3f", adsr.attack),
+    string.format("%.3f", adsr.decay),
+    string.format("%.3f", adsr.sustain),
+    string.format("%.3f", adsr.release),
+  }, ":")
   if toneCache[key] then
     return toneCache[key]
   end
@@ -298,25 +354,10 @@ local function buildTone(waveform, frequency, length)
   end
   local data = love.sound.newSoundData(count, SAMPLE_RATE, 16, 1)
 
-  -- A short ramp in and out, or the speaker clicks at each end.
-  local attack = math.min(math.floor(SAMPLE_RATE * 0.004), math.floor(count * 0.1))
-  local release = math.min(math.floor(SAMPLE_RATE * 0.03), math.floor(count * 0.4))
-  if attack < 1 then attack = 1 end
-  if release < 1 then release = 1 end
-
   for i = 0, count - 1 do
     local phase = (frequency * i / SAMPLE_RATE) % 1
-    local envelope = 1
-    if i < attack then
-      envelope = i / attack
-    end
-    if i > count - release then
-      local tail = (count - i) / release
-      if tail < envelope then
-        envelope = tail
-      end
-    end
-    data:setSample(i, waveSample(waveform, phase) * envelope * 0.7)
+    local level = envelopeAt(i / SAMPLE_RATE, length, adsr)
+    data:setSample(i, waveSample(waveform, phase) * level * 0.7)
   end
 
   toneCache[key] = data
@@ -336,6 +377,8 @@ function synth.new(waveform)
   self.waveform = waveform or sound.kWaveSine
   self.volume = 1
   self._source = nil
+  -- The SDK's own starting shape: straight on, straight off.
+  self.adsr = { attack = 0, decay = 0, sustain = 1, release = 0 }
   return self
 end
 
@@ -346,7 +389,7 @@ function synthMeta:playNote(pitch, volume, length, when)
   length = length or 0.2
   volume = volume or self.volume
 
-  local data = buildTone(self.waveform, frequency, length)
+  local data = buildTone(self.waveform, frequency, length, self.adsr)
   local source = love.audio.newSource(data, "static")
   source:setVolume(volume)
   source:play()
@@ -387,15 +430,39 @@ end
 function synthMeta:copy()
   local other = synth.new(self.waveform)
   other.volume = self.volume
+  other:setADSR(self.adsr.attack, self.adsr.decay, self.adsr.sustain, self.adsr.release)
   return other
 end
 
--- The envelope is baked into the tone, so these are accepted and ignored.
-function synthMeta:setADSR() end
-function synthMeta:setAttack() end
-function synthMeta:setDecay() end
-function synthMeta:setSustain() end
-function synthMeta:setRelease() end
+function synthMeta:setADSR(attack, decay, sustain, release)
+  self.adsr.attack = attack or 0
+  self.adsr.decay = decay or 0
+  self.adsr.sustain = sustain or 1
+  self.adsr.release = release or 0
+end
+
+function synthMeta:getADSR()
+  return self.adsr.attack, self.adsr.decay, self.adsr.sustain, self.adsr.release
+end
+
+function synthMeta:setAttack(seconds)
+  self.adsr.attack = seconds or 0
+end
+
+function synthMeta:setDecay(seconds)
+  self.adsr.decay = seconds or 0
+end
+
+function synthMeta:setSustain(level)
+  self.adsr.sustain = level or 1
+end
+
+function synthMeta:setRelease(seconds)
+  self.adsr.release = seconds or 0
+end
+
+-- Legato means a new note takes over without restarting the envelope. Notes
+-- here are built one at a time, so there is nothing to carry over.
 function synthMeta:setLegato() end
 
 warn.fill("playdate.sound.synth:", synthMeta, {
