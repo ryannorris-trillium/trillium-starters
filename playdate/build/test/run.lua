@@ -188,6 +188,10 @@ test("every shim function is reachable from the playdate namespace", function()
     "playdate.graphics.drawTextAligned",
     "playdate.graphics.image.new",
     "playdate.graphics.image.imageSizeAtPath",
+    "playdate.graphics.pushContext",
+    "playdate.graphics.popContext",
+    "playdate.graphics.lockFocus",
+    "playdate.graphics.unlockFocus",
     "playdate.graphics.imagetable.new",
     -- sound
     "playdate.sound.synth.new",
@@ -894,6 +898,70 @@ test("missing features warn once instead of stopping the game", function()
   image:setMaskImage(nil)
   local after = #playdate.shim.missingSoFar()
   checkEqual(after - before, 1, "three calls, one warning")
+end)
+
+test("drawing into an image never reads the graphics card back", function()
+  fake.clearLog()
+
+  local image = gfx.image.new(20, 20)
+  checkEqual(image.data.isCanvas, nil, "a fresh image is a plain texture")
+
+  gfx.pushContext(image)
+  gfx.setColor(gfx.kColorBlack)
+  gfx.fillRect(0, 0, 20, 20)
+  gfx.popContext()
+
+  checkEqual(image.data.isCanvas, true, "drawing into it made the image its canvas")
+  checkEqual(image.data, image._canvas, "the image and the canvas are one object")
+  local w, h = image:getSize()
+  checkEqual(w, 20, "it still knows its width")
+  checkEqual(h, 20, "it still knows its height")
+
+  local ok, message = pcall(function() image:draw(4, 4) end)
+  check(ok, "a drawn-into image can still be drawn: " .. tostring(message))
+
+  -- Everything else that draws into an image goes through pushContext too.
+  image:copy()
+  image:clear(gfx.kColorWhite)
+  image:scaledImage(2)
+  image:rotatedImage(45)
+
+  local readbacks = 0
+  local canvases = 0
+  for _, entry in ipairs(fake.log) do
+    if entry.name == "canvas.newImageData" then
+      readbacks = readbacks + 1
+    elseif entry.name == "newCanvas" then
+      canvases = canvases + 1
+    end
+  end
+  checkEqual(readbacks, 0, "nothing asked a canvas for its pixels")
+  check(canvases > 0, "canvases were made, so this test was actually exercising the path")
+end)
+
+test("nested pushContext unwinds to the right place", function()
+  local stack = playbit.graphics.contextStack
+  while #stack > 0 do
+    table.remove(stack)
+  end
+
+  local outer = gfx.image.new(10, 10)
+  local inner = gfx.image.new(4, 4)
+
+  gfx.pushContext(outer)
+  checkEqual(love.graphics.getCanvas(), outer._canvas, "drawing goes to the outer image")
+  gfx.pushContext(inner)
+  checkEqual(love.graphics.getCanvas(), inner._canvas, "then to the inner one")
+  gfx.popContext()
+  checkEqual(love.graphics.getCanvas(), outer._canvas, "and back to the outer one")
+  gfx.popContext()
+  checkEqual(love.graphics.getCanvas(), playbit.graphics.canvas, "and finally back to the screen")
+  checkEqual(#stack, 0, "the stack came back empty")
+
+  -- pushContext() with no image saves state without moving the drawing.
+  gfx.pushContext()
+  gfx.popContext()
+  checkEqual(#stack, 0, "a bare pushContext balances too")
 end)
 
 test("image helpers Playbit leaves as errors now work", function()

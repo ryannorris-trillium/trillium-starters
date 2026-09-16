@@ -40,15 +40,21 @@ local love = {}
 
 -- graphics -------------------------------------------------------------------
 
+-- Canvases refuse to be read back, the way WebGL 1 refuses in the browser.
+-- Anything that tries fails here with the same message Ryan saw in the tab.
 local function newCanvasObject(width, height)
   local canvas = {}
+  canvas.isCanvas = true
   canvas.width = width or 400
   canvas.height = height or 240
+  record("newCanvas", canvas.width, canvas.height)
   function canvas:getWidth() return self.width end
   function canvas:getHeight() return self.height end
   function canvas:setFilter() end
   function canvas:newImageData()
-    return fake.newImageData(self.width, self.height)
+    record("canvas.newImageData")
+    error("Pixel formats must match. (GL_INVALID_OPERATION: " ..
+      "glReadPixelsRobustANGLE: Invalid format and type combination)", 2)
   end
   return canvas
 end
@@ -77,6 +83,9 @@ local function newImageObject(width, height)
 end
 
 local color = { 1, 1, 1, 1 }
+local currentCanvas = nil
+local currentShader = nil
+local currentScissor = nil
 
 love.graphics = {
   newShader = function()
@@ -103,9 +112,21 @@ love.graphics = {
   setColor = function(r, g, b, a) color = { r, g, b, a } end,
   getColor = function() return color[1], color[2], color[3], color[4] end,
   setFont = function() end,
-  setCanvas = function() end,
-  setShader = function() end,
-  setScissor = function(...) record("setScissor", ...) end,
+  setCanvas = function(canvas) currentCanvas = canvas end,
+  getCanvas = function() return currentCanvas end,
+  setShader = function(shader) currentShader = shader end,
+  getShader = function() return currentShader end,
+  setScissor = function(...)
+    record("setScissor", ...)
+    currentScissor = { ... }
+  end,
+  getScissor = function()
+    if not currentScissor or currentScissor[1] == nil then
+      return nil
+    end
+    return currentScissor[1], currentScissor[2], currentScissor[3], currentScissor[4]
+  end,
+  origin = function() record("origin") end,
   clear = function(...) record("clear", ...) end,
   push = function() record("push") end,
   pop = function() record("pop") end,

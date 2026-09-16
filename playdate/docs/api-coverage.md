@@ -46,7 +46,7 @@ If a feature behaves oddly, look here first, then at the console.
 | json | Works |
 | Tilemaps | Not available |
 
-## Two things that are different everywhere
+## Three things that are different everywhere
 
 **Frame rate.** A Playdate runs at 30 frames a second. A browser tab draws at
 whatever the screen does, usually 60. The shim skips the extra frames so a game
@@ -57,6 +57,16 @@ turns that off and lets it run flat out.
 browser's storage for the page. That is not the same as a memory card. Closing
 the tab, clearing site data, or opening the game from a different address can
 lose it. On hardware the save is permanent.
+
+**Pixels only go one way.** An image you have drawn into with `pushContext`
+becomes a canvas on the graphics card. Drawing it, scaling it, copying it and
+rotating it all work, because those all push pixels towards the card. Reading
+them back off it does not: WebGL 1 in the browser refuses, with
+`glReadPixelsRobustANGLE: Invalid format and type combination`. So
+`image:sample`, `checkAlphaCollision`, `datastore.writeImage` and the mask
+functions warn and return instead of answering. Images loaded from a `.png` are
+read on the processor, not the card, so imagetables and everything else that
+starts from a file are unaffected.
 
 ## Area by area
 
@@ -73,7 +83,32 @@ different from hardware.
 
 | Playbit has | The shim adds | Not available in the browser |
 |---|---|---|
-| `image.new(width, height)`, `image.new(path)`, `draw` with flip and a source rect, `drawScaled`, `drawRotated`, `getSize` | A path with or without `.png`, and a message naming the file when it is not there; `copy`, `clear`, `drawCentered`, `drawAnchored`, `drawTiled`, `drawRotated` with a scale, `scaledImage`, `rotatedImage`, `imageSizeAtPath` | Masks: `setMaskImage`, `addMask`, `getMaskImage`, `clearMask` warn and do nothing. `drawFaded` draws at full strength. `drawBlurred`, `blendWithImage`, `drawSampled`, `sample`, `setInverted`, `invertedImage`, `vcrPauseFilterImage`. |
+| `image.new(width, height)`, `image.new(path)`, `draw` with flip and a source rect, `drawScaled`, `drawRotated`, `getSize` | A path with or without `.png`, and a message naming the file when it is not there; `copy`, `clear`, `load`, `drawCentered`, `drawAnchored`, `drawTiled`, `drawRotated` with a scale, `scaledImage`, `rotatedImage`, `imageSizeAtPath`. Also a rebuilt `pushContext` and `popContext`, see below | Masks: `setMaskImage`, `addMask`, `getMaskImage`, `clearMask` warn and do nothing. `sample` returns black. `drawFaded` draws at full strength. `drawBlurred`, `blendWithImage`, `drawSampled`, `setInverted`, `invertedImage`, `vcrPauseFilterImage`. |
+
+**Drawing into an image.** `pushContext(image)` points the drawing commands at
+an image instead of the screen, which is how you build artwork in code rather
+than shipping a `.png`:
+
+```lua
+local ball = gfx.image.new(16, 16)
+gfx.pushContext(ball)
+  gfx.setColor(gfx.kColorBlack)
+  gfx.fillCircleAtPoint(8, 8, 7)
+gfx.popContext()
+local sprite = gfx.sprite.new(ball)
+```
+
+Playbit does this by drawing into a canvas on the graphics card and then, after
+every single drawing call, reading the whole canvas back to the processor and
+copying it into the image. The browser cannot do the reading back part, so in
+Playbit alone the first line of artwork you draw kills the game.
+
+The shim drops the copy. The first time an image is pushed it becomes its
+canvas, keeping whatever it already held, and stays that way. Everything that
+uses an image keeps working because a canvas draws like any other texture.
+Nesting still works, and `popContext` goes back to whatever was underneath.
+`lockFocus` and `unlockFocus` are the same two functions under their older
+names.
 
 ### Imagetables
 
@@ -164,7 +199,7 @@ docks and undocks the crank, so `isCrankDocked` is false unless you do that.
 
 | Playbit has | The shim adds | Not available in the browser |
 |---|---|---|
-| `datastore.write`, `datastore.read`, `datastore.delete`. `json.decode`, `json.decodeFile`. `file.load`, `file.open` with `read`, `readline`, `write`, `close`, `file.getSize` | `datastore.write` now accepts the pretty print argument instead of raising. `json.encode`, `json.encodePretty`, `json.encodeToFile`. `file.exists`, `file.isdir`, `file.mkdir`, `file.delete`, `file.listFiles`, `file.getType`, `file.modtime`, `file.rename` | `datastore.writeImage`, `datastore.readImage`, `file:seek`, `file:tell`, `file.run`. |
+| `datastore.write`, `datastore.read`, `datastore.delete`. `json.decode`, `json.decodeFile`. `file.load`, `file.open` with `read`, `readline`, `write`, `close`, `file.getSize` | `datastore.write` now accepts the pretty print argument instead of raising. `json.encode`, `json.encodePretty`, `json.encodeToFile`. `file.exists`, `file.isdir`, `file.mkdir`, `file.delete`, `file.listFiles`, `file.getType`, `file.modtime`, `file.rename` | `datastore.writeImage` and `datastore.readImage`, which would have to read pixels back. `file:seek`, `file:tell`, `file.run`. |
 
 ### Geometry
 

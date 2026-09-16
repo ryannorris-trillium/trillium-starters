@@ -19,6 +19,98 @@ local function withPattern(fn, ...)
   gfx.setImageDrawMode(pbg.drawMode)
 end
 
+-- Drawing into an image --------------------------------------------------------
+--
+-- pushContext points the drawing commands at an image instead of the screen.
+-- Playbit does that by drawing into a canvas and then, after every single
+-- drawing call, reading the canvas back off the graphics card into an
+-- ImageData and copying it into the image's texture.
+--
+-- Reading pixels back off the card is the one thing WebGL 1 will not do here.
+-- In the browser it fails with
+--
+--   GL_INVALID_OPERATION: glReadPixelsRobustANGLE: Invalid format and type
+--   combination
+--
+-- followed by Love's "Pixel formats must match", and the game dies at the
+-- first image it draws into. That is every sprite built from a drawn image.
+--
+-- The fix is to never read back. A canvas is drawable everywhere a texture is,
+-- so once an image has been drawn into, the canvas simply becomes the image.
+-- Nothing has to be copied anywhere.
+
+-- Marker for pushContext() with no image, which saves state without changing
+-- where the drawing goes.
+local SCREEN_CONTEXT = {}
+
+-- Turn an image into its canvas, once, keeping whatever it held before.
+local function promoteToCanvas(image)
+  if image._canvas then
+    return
+  end
+
+  local width, height = image:getSize()
+  local canvas = love.graphics.newCanvas(width, height)
+
+  local previousTarget = love.graphics.getCanvas()
+  local previousShader = love.graphics.getShader()
+  local scissorX, scissorY, scissorWidth, scissorHeight = love.graphics.getScissor()
+  local r, g, b, a = love.graphics.getColor()
+
+  love.graphics.setCanvas(canvas)
+  love.graphics.setScissor()
+  -- No shader and no transform: copy the old pixels across exactly as they
+  -- were, wherever this was called from.
+  love.graphics.setShader()
+  love.graphics.push()
+  love.graphics.origin()
+  love.graphics.setColor(1, 1, 1, 1)
+  if image.data then
+    love.graphics.draw(image.data, 0, 0)
+  end
+  love.graphics.pop()
+
+  love.graphics.setColor(r, g, b, a)
+  love.graphics.setShader(previousShader)
+  love.graphics.setScissor(scissorX, scissorY, scissorWidth, scissorHeight)
+  love.graphics.setCanvas(previousTarget)
+
+  image._canvas = canvas
+  image.data = canvas
+end
+
+function gfx.pushContext(image)
+  local stack = pbg.contextStack
+  if image == nil then
+    stack[#stack + 1] = SCREEN_CONTEXT
+    return
+  end
+  promoteToCanvas(image)
+  stack[#stack + 1] = image
+  love.graphics.setCanvas(image._canvas)
+end
+
+function gfx.popContext()
+  local stack = pbg.contextStack
+  if #stack == 0 then
+    warn.note("popContext() was called with nothing pushed")
+    return
+  end
+  table.remove(stack)
+  -- Back to the innermost image still on the stack, or the screen.
+  for i = #stack, 1, -1 do
+    if stack[i] ~= SCREEN_CONTEXT then
+      love.graphics.setCanvas(stack[i]._canvas)
+      return
+    end
+  end
+  love.graphics.setCanvas(pbg.canvas)
+end
+
+-- Playbit calls this at the end of every drawing command to copy the canvas
+-- back into the image. There is nothing left to copy.
+function pbg.updateContext() end
+
 -- Draw modes ------------------------------------------------------------------
 
 -- Playbit's setImageDrawMode raises an error for the three modes its shader
@@ -374,9 +466,24 @@ function imageMeta:rotatedImage(angle)
   return out
 end
 
+-- Reading one pixel back means reading the graphics card back, which WebGL 1
+-- will not do. Nothing here can answer it.
 function imageMeta:sample(x, y)
-  warn.once("image:sample()")
-  return gfx.kColorWhite
+  warn.note("image:sample() cannot read pixels back in the browser, it returns black")
+  return gfx.kColorBlack
+end
+
+-- Replaces the image's contents from a file. Loading a texture is fine; the
+-- old canvas, if there was one, is dropped.
+function imageMeta:load(path)
+  path = string.gsub(path, "%.png$", "")
+  if not compat.fileExists(path .. ".png") then
+    warn.note("image:load() found no file at " .. path .. ".png")
+    return false
+  end
+  self.data = love.graphics.newImage(path .. ".png")
+  self._canvas = nil
+  return true
 end
 
 function gfx.image.imageSizeAtPath(path)

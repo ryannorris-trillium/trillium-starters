@@ -391,4 +391,8 @@ function playdate.datastore.write(value, filename, prettyPrint)
   love.filesystem.write(filename, jsonParser.encode(value))
 end
 
+-- Saving an image means encoding its pixels, which means reading them back off
+-- the graphics card, which WebGL 1 will not do.
+warn.fill("playdate.datastore.", playdate.datastore, { "writeImage", "readImage" })
+
 return module
