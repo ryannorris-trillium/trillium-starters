@@ -12,7 +12,9 @@ build.build({
   },
   files = {
     { "playbit/playbit", "playbit" },
-    { "source/main.lua", "main.lua" },
+    -- Everything under source/, folder layout and all, so a game split over
+    -- several files with its own art builds the same way a one file game does.
+    { "source", "." },
     { "source/metadata.json", "pdxinfo",
       { json = { build.pdxinfoProcessor, { incrementBuildNumber = false } } }
     },

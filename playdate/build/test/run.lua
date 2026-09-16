@@ -1020,6 +1020,100 @@ test("image helpers Playbit leaves as errors now work", function()
   check(ok, "image helpers failed: " .. tostring(message))
 end)
 
+-- The Playdate-only operators -----------------------------------------------------
+--
+-- build/ops.lua rewrites +=, -=, *= and /= on the way into the browser build.
+-- These run it on strings, and check that what comes out both parses and
+-- means the right thing.
+
+local ops = dofile(testFolder .. "/../ops.lua")
+local loadChunk = loadstring or load
+
+local function rewritten(source)
+  return ops.rewrite(source)
+end
+
+-- Rewrites the source, runs it, and hands back whatever it returns.
+local function value(source)
+  local chunk, message = loadChunk(ops.rewrite(source))
+  if not chunk then
+    return nil, message
+  end
+  local ok, result = pcall(chunk)
+  if not ok then
+    return nil, result
+  end
+  return result
+end
+
+test("compound assignment: the simple forms", function()
+  checkEqual(rewritten("score += 1"), "score = score + (1)", "plus")
+  checkEqual(rewritten("score -= 1"), "score = score - (1)", "minus")
+  checkEqual(rewritten("score *= 2"), "score = score * (2)", "times")
+  checkEqual(rewritten("score /= 2"), "score = score / (2)", "divided")
+end)
+
+test("compound assignment: the value keeps its own precedence", function()
+  checkEqual(value("local a = 10 local b = 3 a -= b + 1 return a"), 6,
+    "a -= b + 1 subtracts the whole sum")
+  checkEqual(value("local a = 10 local b = 3 a /= b - 1 return a"), 5,
+    "a /= b - 1 divides by the whole difference")
+  checkEqual(value("local a = 2 a *= 3 + 4 return a"), 14,
+    "a *= 3 + 4 multiplies by the whole sum")
+end)
+
+test("compound assignment: where the value stops", function()
+  checkEqual(value([[
+    local a, hit = 1, false
+    local function f() hit = true end
+    a += 1; f()
+    return a and hit and a
+  ]]), 2, "a semicolon ends the value, and what follows still runs")
+
+  checkEqual(value("local a = 1 if true then a += 2 end return a"), 3,
+    "`end` ends the value")
+
+  checkEqual(value([[
+    local a = 1
+    a += 2 -- a += 100
+    return a
+  ]]), 3, "a comment ends the value")
+
+  checkEqual(value([[
+    local a = 1
+    local function add(x, y) return x + y end
+    a += add(1,
+      2)
+    return a
+  ]]), 4, "a value split over two lines inside brackets stays whole")
+
+  checkEqual(value([[
+    local a = 1
+    a += 2 +
+      3
+    return a
+  ]]), 6, "a line ending in an operator carries on to the next")
+end)
+
+test("compound assignment: what it leaves alone", function()
+  checkEqual(rewritten([[local s = "a += b"]]), [[local s = "a += b"]], "text in a string")
+  checkEqual(rewritten("-- a += b"), "-- a += b", "text in a comment")
+  checkEqual(rewritten("if a == b then end"), "if a == b then end", "equality")
+  checkEqual(rewritten("if a ~= b then end"), "if a ~= b then end", "inequality")
+  checkEqual(rewritten("if a >= b then end"), "if a >= b then end", "at least")
+  checkEqual(rewritten("if a <= b then end"), "if a <= b then end", "at most")
+end)
+
+test("compound assignment: the thing being assigned to", function()
+  checkEqual(value("local t = { dx = 1 } t.dx += 2 return t.dx"), 3, "a field")
+  checkEqual(value("local t = { {}, { n = 1 } } t[2].n *= 5 return t[2].n"), 5,
+    "a field of an indexed element")
+  checkEqual(value("local t = { 1, 2, 3 } local i = 2 t[i + 1] += 10 return t[3]"), 13,
+    "an index that is itself a sum")
+  checkEqual(value("local s = { p = { q = 1 } } s.p.q -= 4 return s.p.q"), -3,
+    "a field of a field")
+end)
+
 -- Run -------------------------------------------------------------------------------
 
 print("")
