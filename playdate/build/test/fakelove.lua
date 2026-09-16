@@ -40,11 +40,18 @@ local love = {}
 
 -- graphics -------------------------------------------------------------------
 
+-- The window, and every canvas made against it. Setting the window mode
+-- rebuilds the graphics context in a browser, which empties every canvas, so
+-- the canvases here remember when that has happened to them.
+local mode = { width = 800, height = 480, flags = { fullscreen = false, x = 100, y = 100 } }
+local canvases = {}
+
 -- Canvases refuse to be read back, the way WebGL 1 refuses in the browser.
 -- Anything that tries fails here with the same message Ryan saw in the tab.
 local function newCanvasObject(width, height)
   local canvas = {}
   canvas.isCanvas = true
+  canvases[#canvases + 1] = canvas
   canvas.width = width or 400
   canvas.height = height or 240
   record("newCanvas", canvas.width, canvas.height)
@@ -142,6 +149,9 @@ love.graphics = {
   arc = function(...) record("arc", ...) end,
   draw = function(...) record("draw", ...) end,
   print = function(...) record("print", ...) end,
+  getWidth = function() return mode.width end,
+  getHeight = function() return mode.height end,
+  getDimensions = function() return mode.width, mode.height end,
 }
 
 -- image ----------------------------------------------------------------------
@@ -260,8 +270,19 @@ love.timer = {
 }
 
 love.window = {
-  getMode = function() return 800, 480, { fullscreen = false, x = 100, y = 100 } end,
-  updateMode = function() end,
+  getMode = function() return mode.width, mode.height, mode.flags end,
+  updateMode = function(width, height, flags)
+    record("updateMode", width, height)
+    mode.width = width
+    mode.height = height
+    mode.flags = flags or mode.flags
+    -- What the browser does: the context is rebuilt and every canvas comes
+    -- back blank.
+    for i = 1, #canvases do
+      canvases[i].wiped = true
+    end
+    return true
+  end,
 }
 
 love.math = {

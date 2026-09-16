@@ -110,6 +110,14 @@ Nesting still works, and `popContext` goes back to whatever was underneath.
 `lockFocus` and `unlockFocus` are the same two functions under their older
 names.
 
+One thing to know about that. A canvas lives only on the graphics card, and the
+browser throws every canvas away and makes it again, empty, whenever the window
+mode is set. So changing the size of the browser window mid-game empties every
+image you have drawn into. The shim keeps that from happening by itself: the
+window is set once, at the moment the game asks for it, before any artwork has
+been drawn, and a later request for the size the window is already in does
+nothing. Artwork made in `playdate.update` was never at risk either way.
+
 ### Imagetables
 
 | Playbit has | The shim adds | Not available in the browser |

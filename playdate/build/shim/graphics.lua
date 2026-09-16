@@ -39,6 +39,72 @@ end
 -- so once an image has been drawn into, the canvas simply becomes the image.
 -- Nothing has to be copied anywhere.
 
+-- Keeping canvases alive across the first frame ---------------------------------
+--
+-- A canvas lives only on the graphics card. Love throws every canvas away and
+-- makes it again, empty, whenever the window mode is set, because that can
+-- rebuild the whole graphics context. In a browser it always does.
+--
+-- Playbit's header reads the window size once, while it is loading, and then
+-- compares it every frame:
+--
+--   local windowWidth, windowHeight = playbit.graphics.getWindowSize()
+--   function love.draw()
+--     ... if windowWidth ~= newWindowWidth ... love.window.updateMode(...)
+--
+-- The game asks for its window size on the line after the header, so that
+-- reading is always the stale one, and the first frame always calls
+-- updateMode. Anything the game drew into an image while it was loading was
+-- wiped before it was ever seen: sprites built from drawn images came out
+-- blank, and only artwork made inside a frame survived.
+--
+-- Nothing here needs that resize. Two changes make it stop:
+--   1. Playbit's stored window size starts as the size of the window that
+--      conf.lua actually made, instead of Playbit's own 400 by 240 guess.
+--   2. A window mode change that asks for the mode the window is already in
+--      does nothing, rather than rebuilding the context to no purpose.
+-- And a game that really does want a different size gets it immediately, while
+-- it is still loading, so the rebuild happens before any image exists.
+
+local canvasesExist = false
+
+local realUpdateMode = love.window.updateMode
+
+function love.window.updateMode(width, height, flags)
+  local currentWidth, currentHeight, currentFlags = love.window.getMode()
+  local wantsFullscreen = false
+  if flags and flags.fullscreen then
+    wantsFullscreen = true
+  end
+  local isFullscreen = false
+  if currentFlags and currentFlags.fullscreen then
+    isFullscreen = true
+  end
+  if currentWidth == width and currentHeight == height and isFullscreen == wantsFullscreen then
+    return true
+  end
+  if canvasesExist then
+    warn.note("changing the window size empties every image you have drawn into")
+  end
+  return realUpdateMode(width, height, flags)
+end
+
+-- Start from the window conf.lua actually made.
+pbg.setWindowSize(love.graphics.getWidth(), love.graphics.getHeight())
+
+local realSetWindowSize = pbg.setWindowSize
+
+function pbg.setWindowSize(width, height)
+  realSetWindowSize(width, height)
+  -- Resize now rather than on the first frame, so that a game asking for a
+  -- different window still gets one, and still gets it before it has drawn
+  -- anything into an image.
+  local currentWidth, currentHeight, flags = love.window.getMode()
+  if currentWidth ~= width or currentHeight ~= height then
+    love.window.updateMode(width, height, flags)
+  end
+end
+
 -- Marker for pushContext() with no image, which saves state without changing
 -- where the drawing goes.
 local SCREEN_CONTEXT = {}
@@ -77,6 +143,7 @@ local function promoteToCanvas(image)
 
   image._canvas = canvas
   image.data = canvas
+  canvasesExist = true
 end
 
 -- Whatever was the render target before the outermost push. During a frame

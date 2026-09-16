@@ -939,6 +939,38 @@ test("drawing into an image never reads the graphics card back", function()
   check(canvases > 0, "canvases were made, so this test was actually exercising the path")
 end)
 
+test("the first frame does not re-set the window, which would empty every canvas", function()
+  fake.clearLog()
+
+  local image = gfx.image.new(12, 12)
+  gfx.pushContext(image)
+  gfx.setColor(gfx.kColorBlack)
+  gfx.fillRect(0, 0, 12, 12)
+  gfx.popContext()
+  checkEqual(image.data.wiped, nil, "the canvas starts out intact")
+
+  -- Exactly what Playbit's header does on its first frame: it compares the
+  -- window size it read while loading against the one the game asked for, and
+  -- sets the mode. Asking for the mode the window is already in has to be free.
+  local width, height, flags = love.window.getMode()
+  love.window.updateMode(width, height, flags)
+
+  checkEqual(image.data.wiped, nil, "asking for the mode it is already in left the canvas alone")
+  local resets = 0
+  for _, entry in ipairs(fake.log) do
+    if entry.name == "updateMode" then
+      resets = resets + 1
+    end
+  end
+  checkEqual(resets, 0, "and the graphics context was not rebuilt")
+
+  -- A real change still happens. It still costs every canvas, which is why the
+  -- shim does it the moment the game asks, before any image has been drawn.
+  love.window.updateMode(640, 400, flags)
+  checkEqual(image.data.wiped, true, "a genuine resize does empty them")
+  love.window.updateMode(width, height, flags)
+end)
+
 test("nested pushContext unwinds to the right place", function()
   local stack = playbit.graphics.contextStack
   while #stack > 0 do
@@ -948,6 +980,9 @@ test("nested pushContext unwinds to the right place", function()
   local outer = gfx.image.new(10, 10)
   local inner = gfx.image.new(4, 4)
 
+  -- Inside a frame, Playbit's screen canvas is the target.
+  love.graphics.setCanvas(playbit.graphics.canvas)
+
   gfx.pushContext(outer)
   checkEqual(love.graphics.getCanvas(), outer._canvas, "drawing goes to the outer image")
   gfx.pushContext(inner)
@@ -955,8 +990,16 @@ test("nested pushContext unwinds to the right place", function()
   gfx.popContext()
   checkEqual(love.graphics.getCanvas(), outer._canvas, "and back to the outer one")
   gfx.popContext()
-  checkEqual(love.graphics.getCanvas(), playbit.graphics.canvas, "and finally back to the screen")
+  checkEqual(love.graphics.getCanvas(), playbit.graphics.canvas,
+    "and finally back to whatever was the target before the first push")
   checkEqual(#stack, 0, "the stack came back empty")
+
+  -- While the game is still loading there is no target, and it has to go back
+  -- to none: Love refuses to run its event loop with a canvas left active.
+  love.graphics.setCanvas(nil)
+  gfx.pushContext(outer)
+  gfx.popContext()
+  checkEqual(love.graphics.getCanvas(), nil, "and back to no canvas at all while loading")
 
   -- pushContext() with no image saves state without moving the drawing.
   gfx.pushContext()
