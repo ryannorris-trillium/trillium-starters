@@ -85,11 +85,20 @@ end
 -- run its event loop while a canvas is left active ("love.event.pump cannot
 -- be called while a Canvas is active").
 local baseTarget = nil
+local baseShader = nil
 
 function gfx.pushContext(image)
   local stack = pbg.contextStack
   if #stack == 0 then
     baseTarget = love.graphics.getCanvas()
+    -- Playbit decides black versus white inside its shader, from the pattern
+    -- and mode uniforms it sends before every shape. Inside a frame that
+    -- shader is already active. While the game is still loading it is not,
+    -- and in the browser a uniform sent to an inactive shader is dropped
+    -- ("uniform1iv: location is not from the associated program"), so every
+    -- shape drawn into an image at load time came out white. Activate it.
+    baseShader = love.graphics.getShader()
+    love.graphics.setShader(pbg.shader)
   end
   if image == nil then
     stack[#stack + 1] = SCREEN_CONTEXT
@@ -116,7 +125,9 @@ function gfx.popContext()
     end
   end
   love.graphics.setCanvas(baseTarget)
+  love.graphics.setShader(baseShader)
   baseTarget = nil
+  baseShader = nil
 end
 
 -- Playbit calls this at the end of every drawing command to copy the canvas
