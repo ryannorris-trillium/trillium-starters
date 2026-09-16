@@ -23,18 +23,39 @@ playdate shim: image:setMaskImage() does nothing here; Playbit has no mask suppo
 
 If a feature behaves oddly, look here first, then at the console.
 
+## What the build does to your file
+
+Nothing in `source/` has to know it is going to a browser. The file you write
+is the file that compiles for the hardware.
+
+- **`+=`, `-=`, `*=` and `/=` work.** The Playdate runs a Lua with four extra
+  operators that plain Lua does not have, so the browser build rewrites
+  `score += 1` into `score = score + (1)` on the way through. See
+  `build/ops.lua`. The device build leaves them alone; there they are real.
+- **Everything under `source/` is packaged, folders and all.** A game split
+  over several files with its own art builds the same way a one file game does:
+  `import "Fish/fish"` and `gfx.image.new("images/bg")` resolve exactly as they
+  do on the device.
+- **`.fnt` fonts are copied across untouched** and read at run time, so a font
+  exported from Caps works with no conversion step.
+- **The browser draws at double size** (800 by 480), because a 400 by 240
+  window is a postage stamp on a laptop. A game that wants something else calls
+  `playbit.graphics.setCanvasScale` inside a `!if LOVE2D then` block, or
+  `playdate.display.setScale`, which works here as it does on hardware.
+
 ## The short version
 
 | Area | State in the browser |
 |------|----------------------|
 | Drawing shapes and text | Works |
+| **Playdate `.fnt` fonts** | **Works, added by the shim** |
 | Images | Works, no masks |
 | Imagetables | Works |
 | **Sprites and collisions** | **Works, added by the shim** |
 | Animators, loops, blinkers | Works |
 | Timers and frame timers | Works, replaced by the shim |
 | Sound: players and a synth | Works, no effects or sequences |
-| Buttons and crank | Works |
+| Buttons and crank | Works, including the callbacks |
 | Accelerometer | Always reports the device lying flat |
 | Crank indicator | Works, drawn differently |
 | gridview | Not available |
@@ -44,7 +65,7 @@ If a feature behaves oddly, look here first, then at the console.
 | Geometry | Works |
 | Pathfinder | Not available |
 | json | Works |
-| Tilemaps | Not available |
+| **Tilemaps** | **Works, added by the shim** |
 
 ## Three things that are different everywhere
 
@@ -176,13 +197,22 @@ as on hardware.
 
 | Playbit has | The shim adds | Not available in the browser |
 |---|---|---|
-| One built in font, `font.new` for its own `.fnt` format, `drawText`, `drawTextAligned`, `drawTextInRect`, `getTextSize`, `setFont`, `getFont`, `getSystemFont` | nothing | Font families, tracking, leading adjustment, `getGlyph`, and the width, height, wrap mode and alignment arguments to `drawText`: passing them raises an error from Playbit. Use `drawTextInRect` or `drawTextAligned` instead. |
+| One built in font, `drawText`, `drawTextAligned`, `drawTextInRect`, `getTextSize`, `getFont` | **Real Playdate `.fnt` fonts**: `font.new(path)`, `setFont`, `getSystemFont`, `setFontTracking`, `font.newFamily`, and on a font `getTextWidth`, `getHeight`, `getGlyph`, `setTracking`, `setLeading`, `drawText`, `drawTextAligned`, `drawTextInRect`. Multi line text works | Bold and italic in one family: a family is loaded, but every weight is the same font. The `*bold*` and `_italic_` markup in a string is not applied. The width, height, wrap mode and alignment arguments to `drawText`: passing them raises an error from Playbit. Use `drawTextInRect` or `drawTextAligned` instead. |
+
+A Playdate font is two files: an image with every glyph in a grid, named
+`name-table-14-14.png`, and a plain text `name.fnt` listing the glyphs in the
+order they appear in that grid with how far the pen moves after each one.
+Playbit hands the `.fnt` straight to Love, which reads a different format and
+answers "Invalid font file". The browser build copies `.fnt` files across
+untouched and `build/shim/font.lua` reads the real format at run time. Glyphs
+are drawn as pieces of the image, one per character, so `setImageDrawMode` with
+`fillWhite` gives white text just as it does on hardware.
 
 ### Sound
 
 | Playbit has | The shim adds | Not available in the browser |
 |---|---|---|
-| `sampleplayer` and `fileplayer`, `.wav` only | Any file Love can read (`.wav`, `.ogg`, `.mp3`), with or without the extension in the path; `play(0)` to loop; `stop`, `pause`, `isPlaying`, `setVolume`, `getVolume`, `setRate`, `getLength`, `copy`, `setOffset`; a silent stand in plus one warning when the file is missing; `sound.sample`; `sound.synth` with sine, square, sawtooth, triangle and noise, `playNote` taking a frequency, a MIDI number or a name like `"C4"`, `playMIDINote`, `stop`, `isPlaying`, `setVolume`, `setWaveform` | A repeat count above 1 plays once. ADSR and envelope settings are accepted and ignored. Channels, effects (bitcrusher, ringmod, filters, overdrive, delay lines), sequences, tracks, instruments, LFOs, control signals, and microphone input. |
+| `sampleplayer` and `fileplayer`, `.wav` only | Any file Love can read (`.wav`, `.ogg`, `.mp3`), with or without the extension in the path; `play(0)` to loop; `stop`, `pause`, `isPlaying`, `setVolume`, `getVolume`, `setRate`, `getLength`, `copy`, `setOffset`; a silent stand in plus one warning when the file is missing; `sound.sample`; `sound.synth` with sine, square, sawtooth, triangle and noise, `playNote` taking a frequency, a MIDI number or a name like `"C4"`, `playMIDINote`, `stop`, `isPlaying`, `setVolume`, `setWaveform`, and a real `setADSR` / `setAttack` / `setDecay` / `setSustain` / `setRelease` | A repeat count above 1 plays once. Channels, effects (bitcrusher, ringmod, filters, overdrive, delay lines), sequences, tracks, instruments, LFOs, control signals, and microphone input. |
 
 The synth builds the waveform sample by sample the first time it plays a note
 and keeps it, so the same note is cheap after that.
@@ -191,7 +221,18 @@ and keeps it, so the same note is cheap after that.
 
 | Playbit has | The shim adds | Not available in the browser |
 |---|---|---|
-| `buttonIsPressed`, `buttonJustPressed`, `buttonJustReleased`, `getButtonState`, the `keyPressed` and `keyReleased` callbacks, `getCrankPosition`, `getCrankChange`, `isCrankDocked` | `getCrankTicks`, and `startAccelerometer`, `stopAccelerometer`, `readAccelerometer`, `accelerometerIsRunning`, `getDeviceOrientation`, `getPitchAndRoll` | A real accelerometer. `readAccelerometer` always returns `0, 0, 1`, which is the device lying flat and face up. |
+| `buttonIsPressed`, `buttonJustPressed`, `buttonJustReleased`, `getButtonState`, the `keyPressed` and `keyReleased` callbacks, `getCrankPosition`, `getCrankChange`, `isCrankDocked` | **The button callbacks**: `AButtonDown`, `AButtonHeld`, `AButtonUp`, the same three for B, and `upButtonDown` / `upButtonUp` and friends for the d-pad; `cranked`, `crankDocked`, `crankUndocked`, `gameWillPause`, `gameWillResume`; `playdate.inputHandlers.push` and `pop`; `getCrankTicks`, and `startAccelerometer`, `stopAccelerometer`, `readAccelerometer`, `accelerometerIsRunning`, `getDeviceOrientation`, `getPitchAndRoll` | A real accelerometer. `readAccelerometer` always returns `0, 0, 1`, which is the device lying flat and face up. |
+
+A game can answer a button by name rather than asking every frame:
+
+```lua
+function playdate.AButtonDown() player:jump() end
+```
+
+Playbit records which buttons are down but calls none of these, so a game
+written that way used to sit there doing nothing. `build/shim/input.lua` calls
+them once a frame, just before `playdate.update`, which is where the hardware
+calls them. `gameWillPause` fires when the system menu opens.
 
 Arrow keys are the d-pad, `S` is A and `A` is B. The crank is the scroll wheel,
 and the starter maps `,` and `.` (or `Q` and `E`) to it as well. Middle clicking
@@ -219,7 +260,7 @@ docks and undocks the crank, so `isCrankDocked` is false unless you do that.
 
 | Playbit has | The shim adds | Not available in the browser |
 |---|---|---|
-| nothing, there is no `playdate.display` | `getWidth`, `getHeight`, `getSize`, `getRect`, `setRefreshRate`, `getRefreshRate`, `setInverted`, `getInverted`, `setOffset`, `getOffset`, `flush`. `setRefreshRate` really does hold the game to that many frames a second, and `setInverted` really does swap the two colors | `setScale` is stored and ignored: the browser always draws at 1x. `setMosaic`, `setFlipped`, `loadImage`. |
+| nothing, there is no `playdate.display` | `getWidth`, `getHeight`, `getSize`, `getRect`, `setRefreshRate`, `getRefreshRate`, `setInverted`, `getInverted`, `setOffset`, `getOffset`, `flush`. `setRefreshRate` really does hold the game to that many frames a second, and `setInverted` really does swap the two colors | `setMosaic`, `setFlipped`, `loadImage`. `setMosaic`, `setFlipped`, `loadImage`. |
 
 ### System menu
 
@@ -235,13 +276,67 @@ hardware.
 
 | Playbit has | The shim adds | Not available in the browser |
 |---|---|---|
-| `tilemap.new`, `setImageTable`, `setSize`, `setTileAtPosition`, `getTileAtPosition`, `setTiles`, `getTileSize`, `getSize`, `getPixelSize` | nothing | `tilemap:draw`, `tilemap:drawIgnoringOffset`, `tilemap:getTiles` and `tilemap:getCollisionRects` all raise an error, which leaves tilemaps unusable. Draw tiles with a loop of `image:draw` instead. `playdate.pathfinder` warns and returns nil. |
+| `tilemap.new`, `setImageTable` | `setSize` that keeps the grid, `setTileAtPosition` and `getTileAtPosition` that agree about which cell is which, `setTiles`, `getTiles`, `getSize`, `getTileSize`, `getPixelSize`, `draw` with a source rect, `drawIgnoringOffset`, `getCollisionRects`, `gfx.sprite.addWallSprites`, `sprite:setTilemap` and `getTilemap` | nothing |
+
+Playbit had the shape of the class and little else: `draw` asserted,
+`getCollisionRects` and `getTiles` raised errors, `setSize` threw the grid away,
+and `setTileAtPosition` indexed the grid with x times y, so the tile at (2, 3)
+and the tile at (3, 2) were the same slot.
+
+`getCollisionRects(emptyIDs)` groups the solid tiles into as few rectangles as
+will cover them and returns them **in tile coordinates**, one based, the same as
+`setTileAtPosition`. `gfx.sprite.addWallSprites(tilemap, emptyIDs, xOffset,
+yOffset)` turns those into invisible collision sprites in pixels, which is how a
+level's floors and pipes become something to stand on without one sprite per
+block.
+
+`playdate.pathfinder` warns and returns nil.
 
 ### Odds and ends
 
 | Playbit has | The shim adds | Not available in the browser |
 |---|---|---|
 | `getTime`, `getSecondsSinceEpoch`, `getCurrentTimeMilliseconds`, `playdate.string`, `playdate.metadata`, the `class` and `Object` system | `getElapsedTime`, `resetElapsedTime`, `getFPS`, `drawFPS`, `isSimulator`, `getReduceFlashing`, `getFlipped`, `getSystemLanguage`, `getPowerStatus`, `getBatteryPercentage`, `apiVersion`, `printTable`, `where`, `playdate.math.lerp`, `playdate.math.clamp`, and no-ops for `wait`, `stop`, `start`, `setAutoLockDisabled`, `setCollectsGarbage` and friends. Every `import("CoreLibs/...")` path now resolves, including `sprites`, `ui`, `math`, `animator`, `easing`, `keyboard`, `nineslice` and `qrcode`, so an import can no longer blank the screen before the game starts | `playdate.keyboard`, `playdate.nineSlice`, `generateQRCode`, `playdate.restart`, `playdate.getStats`. |
+
+## Tested against SDK examples
+
+`setup-sdk.sh` installs the Playdate SDK at `~/PlaydateSDK`, and its
+`Examples/` folder is a good measure of whether real Playdate code runs here:
+it is what Panic ships, written against the real API, with no idea a browser
+exists. Copy one into `source/` and build it:
+
+```bash
+rm -f playdate/source/main.lua
+cp -r ~/PlaydateSDK/Examples/Asheteroids/Source/. playdate/source/
+bash playdate/dev-web.sh
+```
+
+(Keep `source/conf.lua` and `source/metadata.json`; the examples do not have
+them. `git checkout playdate/source` puts the starter's own game back.)
+
+These are the ones that have been through the browser build, and what had to
+change for them:
+
+| Example | Status | What was missing |
+|---|---|---|
+| **Asheteroids** | Plays | Everything about it failed at first. The `+=` operators, which plain Lua does not have; `polygon * transform` and `polygon:getBounds`, which Playbit raises errors for; `gfx.kColorClear`, which was nil, so `if colour == kColorClear then don't draw` matched an unset colour and the asteroids were invisible; a polygon outline whose first and last point are the same, which Love's mitre turns into a black wedge across the screen; a sprite's drawing clipped to its own bounds, without which every asteroid left a permanent trail; and the button callbacks, without which the ship could not be steered. |
+| **FlippyFish** | Plays | Playdate `.fnt` fonts for the score, which Playbit cannot read. `image.width` and `image.height` as properties. `sprite:alphaCollision`, which now reads the file the image came from. `display.setInverted`, which needed the shader's two colours to be settings again rather than constants. |
+| **Level 1-1** | Plays | Tilemaps, which were unusable: it draws two of them, edits one while playing, and builds its walls out of a third. `gfx.sprite.addWallSprites`. A collision normal that survives being reported by the other axis, and a sprite pushed out of a floor it starts a pixel inside, without which the player could stand but never walk. `setIgnoresDrawOffset`, without which the score scrolled away with the camera. `moveWithCollisions` taking a point, and a vector2D answering to `x` and `y`. Its `.wav` sounds and its `playdate.file` level loading already worked. |
+| **SpriteCollisionMasks** | Plays | A `collisionResponse` set to a constant rather than a function; `getCollideBounds` returning four numbers rather than a rect. (The masks in its name are group masks, not image masks, so nothing here is out of reach.) |
+| **2020** | Does not run | Not the browser's fault: the example asks for `images/x/1` and ships `images/explosion/1`. It fails the same way on hardware. |
+
+Nothing tried so far is impossible in principle. The things that genuinely
+cannot work in a browser are the ones that need to read pixels back off the
+graphics card, listed under *Pixels only go one way* above: an example built on
+`image:getMaskImage`, `datastore.writeImage` or `image:sample` would run but
+draw the wrong thing. `alphaCollision` and `checkAlphaCollision` dodge that by
+reading the `.png` the image was loaded from, so they are exact for artwork that
+came from a file and warn once, counting the hit, for artwork drawn in code.
+Examples with C in them (`C_API/Examples`) cannot be built here at all.
+
+The SDK examples are Panic's, under their own licence, so none of them are
+committed here. Copy one in from `~/PlaydateSDK/Examples` when you want to try
+it.
 
 ## Checking it yourself
 

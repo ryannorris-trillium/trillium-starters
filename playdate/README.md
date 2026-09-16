@@ -36,10 +36,11 @@ on top: sprites and collisions, animators, frame timers, a synth, the system
 menu, and more. Between the two, most of what the SDK documentation describes
 works in the tab.
 
-A real Playdate has a crank on its side. A Chromebook does not, so the block at
-the bottom of `source/main.lua` turns `,` and `.` into crank rotation for the
-browser. That block is marked `!if LOVE2D`, which means the build system deletes
-it when it compiles for the real hardware.
+A real Playdate has a crank on its side. A Chromebook does not, so the browser
+build turns `,` and `.` into crank rotation, and `Q` and `E` do the same. The
+scroll wheel works too. None of that is in your file: `source/main.lua` is
+Playdate code and nothing else, which is why an example straight out of the
+Playdate SDK runs here unchanged.
 
 ## What works in the browser
 
@@ -56,8 +57,8 @@ playdate shim: image:setMaskImage() does nothing here; Playbit has no mask suppo
 
 The full list, area by area, honest about what is faked:
 [docs/api-coverage.md](docs/api-coverage.md). The short version of what is
-missing is image masks, tilemaps, `playdate.ui.gridview`, the pathfinder, sound
-effects and sequences, and the accelerometer.
+missing is image masks, `playdate.ui.gridview`, the pathfinder, sound effects
+and sequences, and the accelerometer.
 
 Two things the browser adds. Press `M` for the system menu, then up and down to
 move and `S` to choose. And the game is held to the Playdate's 30 frames a

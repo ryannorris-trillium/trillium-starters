@@ -71,8 +71,28 @@ local function call(name, ...)
   end
 end
 
+-- A Chromebook has no scroll wheel, so the keys turn the crank instead: comma
+-- and full stop, or q and e, six degrees a frame in either direction. Playbit
+-- moves the crank from the wheel, so this moves it the same way and everything
+-- downstream -- getCrankPosition, getCrankChange, the cranked callback -- sees
+-- a real turn. The wheel still works where there is one, and a docked crank
+-- ignores both, as it does on hardware.
+local function crankFromKeys()
+  if not (love.keyboard and love.keyboard.isDown) then
+    return
+  end
+  if love.keyboard.isDown(",", "q") then
+    love.wheelmoved(0, 1)
+  end
+  if love.keyboard.isDown(".", "e") then
+    love.wheelmoved(0, -1)
+  end
+end
+
 function module.dispatch()
   local now = love.timer.getTime()
+
+  crankFromKeys()
 
   for i = 1, #buttons do
     local entry = buttons[i]
