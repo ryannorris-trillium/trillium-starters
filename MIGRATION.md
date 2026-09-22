@@ -56,8 +56,9 @@ secret values are recorded in this migration pass.
 
 1. `git log --oneline -5` on `main` should show `78f804c` at HEAD (or later);
    branch `playdate-menu-wip` should show `aad67d9` (paused WIP, see below).
-2. `git status --short --ignored` — expect exactly one ignored entry,
-   `playdate/build/__pycache__/`. Nothing else should be untracked.
+2. `git status --short --ignored` — expect only ignored entries (`__pycache__/`,
+   `.claude/settings.local.json`, and after a playdate run `playdate/playbit/`,
+   `playdate/_web/`). Nothing should be untracked.
 3. Smoke-test a couple of starters from inside a Codespace built from
    `trillium-starter`: `get pygame` then `bash pygame/dev.sh`; `get love` then
    `bash love/build.sh`; `get playdate` then `bash playdate/dev-web.sh`
@@ -73,13 +74,9 @@ secret values are recorded in this migration pass.
 
 ## Known issues / things needing Ryan's attention
 
-- **`showdown/__pycache__/*.pyc` files are committed to git** (three `.pyc`
-  files, compiled under Python 3.14 despite the class pin being 3.12). There
-  is no root-level `.gitignore` in this repo (only `playdate/.gitignore`
-  exists) so nothing stops this from happening again. Recommend adding a root
-  `.gitignore` with `__pycache__/` and `*.pyc`, and removing the three
-  committed `.pyc` files, in a future housekeeping pass — left untouched here
-  since it's pre-existing tracked content, not an uncommitted change.
+- ~~`showdown/__pycache__/*.pyc` committed to git~~ — **fixed 2026-09-21 on
+  Linux**: the three `.pyc` files were removed and a root `.gitignore`
+  (`__pycache__/`, `*.pyc`, `.claude/settings.local.json`) was added.
 - **Branch `playdate-menu-wip`** (pushed, `aad67d9`, 1 commit ahead of
   `main`): untested edge-triggered A/B button handling + system menu item
   work, paused 2026-09-16 per Ryan's decision (Hazel moved to her own
@@ -89,7 +86,28 @@ secret values are recorded in this migration pass.
   offset with no visible items (needs an origin/offset reset). Full detail in
   the trillium-physics repo's agent memory:
   `.claude/agent-memory/project_cs_demo_codespace.md`.
-- No CLAUDE.md or Claude agent-memory directory exists in this repo itself.
+- No CLAUDE.md in this repo. A Claude agent-memory index now lives at
+  `.claude/agent-memory/MEMORY.md` (created 2026-09-21; per-machine
+  `.claude/settings.local.json` points `autoMemoryDirectory` at it and is
+  gitignored).
+
+## Linux migration status (2026-09-21, Ubuntu 26.04)
+
+Cloned fresh to `~/projects/trillium-starters` (remote keeps the
+`ryannorris-trillium@` username; `playdate-menu-wip` fetched as a local
+branch, not merged). Local git identity: `ryan.norris@trilliumacademy.org`.
+Push with the school token: `GH_TOKEN="$(gh auth token -u ryannorris-trillium)" git push origin main`.
+
+- Added `.gitattributes` (`* text=auto eol=lf`) so any future Windows
+  checkout can't introduce CRLF into `get.sh` or other scripts; all tracked
+  text files were already LF.
+- Validated on Linux: `bash -n` on every `.sh`; `bash playdate/build/test/check.sh`
+  (Lua 5.1 audit, build, parse check, 432 shim checks, 60-frame smoke test —
+  all pass, with Playbit cloned at the pinned commit); `love/` packaged and
+  converted with `npx love.js` (serve step not run); `showdown` unittest
+  runner works under Python 3.14 and 3.12 (4 failures / 9 errors, expected by
+  design); other Python starters byte-compile (except `hunt/level2.py`, whose
+  syntax error is the intended puzzle). `pygame/dev.sh` (pygbag) not run.
 
 ## Cross-reference
 

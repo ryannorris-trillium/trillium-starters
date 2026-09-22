@@ -1,0 +1,4 @@
+* text=auto eol=lf
+*.pyc binary
+*.png binary
+*.wav binary
