@@ -11,11 +11,16 @@ build() { pygbag --build "$folder" >/tmp/pygbag-build.log 2>&1 && echo "built $(
 snapshot() { find "$folder" -path "$folder/build" -prune -o -type f \( -name '*.py' -o -name '*.png' -o -name '*.jpg' -o -name '*.wav' -o -name '*.ogg' -o -name '*.txt' -o -name '*.json' \) -print0 | xargs -0 md5sum 2>/dev/null | md5sum; }
 
 build
-npx --yes serve --listen 3000 "$folder/build/web" >/tmp/serve.log 2>&1 &
+if [ -f "$folder/devserver.py" ]; then
+  python3 "$folder/devserver.py" "$folder/build/web" 3000 &
+else
+  npx --yes serve --listen 3000 "$folder/build/web" >/tmp/serve.log 2>&1 &
+fi
 server=$!
 trap 'kill $server 2>/dev/null; exit 0' INT TERM
 echo "serving on port 3000 (Ports tab → right-click 3000 → Port Visibility → Public, then open it)"
 echo "watching $folder/ for changes…"
+echo "your print() lines and any errors show up here, in this terminal"
 last="$(snapshot)"
 while kill -0 $server 2>/dev/null; do
   sleep 2

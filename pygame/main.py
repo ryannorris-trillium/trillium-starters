@@ -10,6 +10,7 @@ Pygame. On a real desktop the same file runs with `python main.py`.
 """
 import asyncio
 import pygame
+import crashscreen  # shows errors on the game screen and in the terminal
 
 WIDTH, HEIGHT = 640, 400
 
@@ -46,4 +47,4 @@ async def main():
     pygame.quit()
 
 
-asyncio.run(main())
+asyncio.run(crashscreen.guard(main))
