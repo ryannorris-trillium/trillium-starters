@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs opencode in this codespace and puts the class AGENTS.md in your repo.
+# Installs opencode in this codespace and puts the class AGENTS.md and opencode.json in your repo.
 #   bash opencode/setup.sh
 set -e
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -22,9 +22,16 @@ else
   echo "Added AGENTS.md to $repo (opencode reads it every time it starts)."
 fi
 
+if [ -e "$repo/opencode.json" ]; then
+  echo "Your repo already has an opencode.json. Leaving it alone."
+else
+  cp "$here/opencode.json" "$repo/opencode.json"
+  echo "Added opencode.json to $repo (picks the class's default model)."
+fi
+
 echo
 echo "Done. Open a NEW terminal (the + in the terminal panel), then:"
 echo "  1. cd $repo"
 echo "  2. opencode"
-echo "  3. Type /connect, pick GitHub Copilot, and follow the code it shows you."
+echo "  3. Type /connect, search OpenRouter, and paste the key Ryan gave you."
 echo "The full steps are in opencode/README.md."

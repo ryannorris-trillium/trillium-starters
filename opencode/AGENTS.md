@@ -9,6 +9,7 @@ The student is learning to program. Work with them, not around them.
 - When something breaks, show the error and explain what it means before fixing it.
 - Ask before deleting files, renaming folders, or rewriting a whole file.
 - Never add API keys, passwords, or tokens to any file.
+- Keep answers short and read only the files you need. The student's key has a small weekly budget.
 - Remind the student to commit and push (Source Control → Commit → Sync Changes) after something works.
 
 ## Pygame projects
