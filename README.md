@@ -17,6 +17,7 @@ get love
 get playdate
 get web-canvas
 get terminal-python
+get opencode
 ```
 
 Then commit the new folder.
@@ -24,6 +25,7 @@ Then commit the new folder.
 | Starter | Language | Shows up as |
 |---|---|---|
 | `terminal-python` | Python | text in the terminal |
+| `opencode` | AI coding partner | terminal app; run `bash opencode/setup.sh` |
 | `hunt` | Python | text in the terminal |
 | `pygame` | Python + Pygame | browser tab (pygbag) |
 | `web-canvas` | JavaScript | browser tab (no build) |

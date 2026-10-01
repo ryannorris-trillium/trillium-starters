@@ -6,7 +6,7 @@
 set -e
 name="${1:-}"
 if [ -z "$name" ]; then
-  echo "Which starter? hunt  madlibs  terminal-python  pygame  playdate  web-canvas  love  showdown"
+  echo "Which starter? hunt  madlibs  terminal-python  pygame  playdate  web-canvas  love  showdown  opencode"
   read -r -p "Type one and press Enter: " name < /dev/tty
 fi
 repo="https://github.com/ryannorris-trillium/trillium-starters"
